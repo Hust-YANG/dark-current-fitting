@@ -43,7 +43,7 @@ A Python tool for quantitative multi-mechanism dark current component fitting of
 <p align="center">
 <img width="600" alt="sample_fitting_600dpi" src="https://github.com/user-attachments/assets/f7cd9e9a-ad39-47c6-8df9-a6f7d8a57dd7" />
 </p>
-*Figure 1. Dark current J-V characteristics and multi-mechanism fitting results. Blue circles: experimental data; orange solid: total fit; green dashed: J<sub>main</sub>; purple dash-dotted: J<sub>Ohm</sub>; light blue dotted: J<sub>TAT</sub>.*
+Figure 1. Dark current J-V characteristics and multi-mechanism fitting results. 
 
 ## Installation
 
