@@ -1,8 +1,5 @@
 # Dark Current Fitting — PbS CQD Photodetector
 
-<img width="1000" alt="sample_fitting_600dpi" src="https://github.com/user-attachments/assets/4417e2be-a7f9-401d-8cd3-2b8feb3e0738" />
-
-
 A Python tool for quantitative multi-mechanism dark current component fitting of PbS colloidal quantum dot (CQD) infrared photodetectors. Decomposes measured J-V characteristics into three physically distinct transport components using segmented curve fitting with global refinement.
 
 ## Fitting Model
@@ -44,7 +41,7 @@ A Python tool for quantitative multi-mechanism dark current component fitting of
 
 ## Sample Output
 
-![Uploading sample_fitting_600dpi.png…]()
+<img width="900" alt="sample_fitting_600dpi" src="https://github.com/user-attachments/assets/f7cd9e9a-ad39-47c6-8df9-a6f7d8a57dd7" />
 
 *Figure 1. Dark current J-V characteristics and multi-mechanism fitting results. Blue circles: experimental data; orange solid: total fit; green dashed: J<sub>main</sub>; purple dash-dotted: J<sub>Ohm</sub>; light blue dotted: J<sub>TAT</sub>.*
 
