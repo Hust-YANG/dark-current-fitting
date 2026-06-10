@@ -1,12 +1,12 @@
 {
   "paper_reference": "Table 4.3 - 4-AMPY ligand passivation study on PbS CQD photodetectors",
   "j_btb_exclusion": {
-    "rationale": "J_BTB (band-to-band tunneling) requires high doping concentrations and extremely narrow depletion regions (typically <10 nm), conditions not satisfied in PbS CQD photodetectors due to their moderate doping levels (~10^16 cm^-3) and relatively thick active layers (~200-400 nm). The CQD film's granular structure and organic ligand matrix further preclude the coherent band bending required for direct band-to-band tunneling. Including an unphysical J_BTB component would introduce an extra free parameter that degrades the physical interpretability of J0, A, and J_TAT parameters without improving fit quality — a classic case of overfitting.",
+    "rationale": "J_BTB requires high doping and extremely narrow depletion regions (<10 nm), conditions not satisfied in PbS CQD photodetectors (~10^16 cm^-3 doping, ~200-400 nm active layer).",
     "forbidden": true
   },
   "reference_parameters": {
     "control_unpassivated": {
-      "label": "Control PD (Unpassivated)",
+      "label": "Control PD",
       "J0_nA_per_cm2": 148.0,
       "J0_A_per_cm2": 1.48e-7,
       "A": 1.67,
@@ -15,7 +15,7 @@
       "Rsh_ohm_cm2": 1559.0
     },
     "sample_passivated": {
-      "label": "4-AMPY (Passivated)",
+      "label": "Optimized PD",
       "J0_nA_per_cm2": 26.3,
       "J0_A_per_cm2": 2.63e-8,
       "A": 1.44,
@@ -23,6 +23,5 @@
       "C": 11.02,
       "Rsh_ohm_cm2": 12247.0
     }
-  },
-  "parameter_naming_note": "In the Python code, the TAT denominator exponent parameter is 'c' (lowercase). In the academic paper Table 4.3 and all generated reports, it is labeled 'C' (uppercase) to match publication convention."
+  }
 }
