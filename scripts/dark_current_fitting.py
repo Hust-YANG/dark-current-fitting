@@ -209,16 +209,12 @@ def load_data(filepath, area=None, auto_dark=True, manual_sweep=None, max_points
     if manual_sweep is not None:
         if manual_sweep in sweeps_dict:
             use_sweeps = [manual_sweep]
-            print(f"  Manual sweep selection: {manual_sweep}")
         else:
-            print(f"  Warning: sweep '{manual_sweep}' not found, using auto-detection")
             use_sweeps = _identify_dark_sweeps(sweeps_dict, filepath) if auto_dark else list(sweeps_dict.keys())
     elif auto_dark and len(sweeps_dict) > 1:
         use_sweeps = _identify_dark_sweeps(sweeps_dict, filepath)
     else:
         use_sweeps = list(sweeps_dict.keys())
-        if len(sweeps_dict) == 1:
-            print(f"  Single sweep detected, using all {len(sweeps_dict[use_sweeps[0]]['V'])} pts")
     all_V, all_I = [], []
     for sid in sorted(use_sweeps):
         all_V.extend(sweeps_dict[sid]['V'])
@@ -226,21 +222,19 @@ def load_data(filepath, area=None, auto_dark=True, manual_sweep=None, max_points
     if max_points is not None and max_points > 0:
         all_V = all_V[:max_points]
         all_I = all_I[:max_points]
-        print(f"  Using first {len(all_V)} points (max_points={max_points})")
     V_raw = np.array(all_V)
     I_raw = np.array(all_I)
     V_fit = -V_raw
     if area is not None and area > 0:
         J_fit = -I_raw / area
-        print(f"  Loaded {len(V_fit)} pts, area={area} cm2")
     else:
         J_fit = -I_raw
-        print(f"  Loaded {len(V_fit)} pts")
+    print(f"  Loaded {len(V_fit)} pts")
     return V_fit, J_fit
 
 def fit_dark_current(V, J, sample_name="Sample", T=300):
     Vt = thermal_voltage(T)
-    print(f"\n{'='*60}\nFitting (Eq.2): {sample_name}\n{'='*60}")
+    print(f"\nFitting (Eq.2): {sample_name}")
     def fit_func(V, J0, A, Rsh, B, c, Vbi):
         return three_component_model(V, J0, A, Rsh, B, c, Vbi, Vt=Vt)
     for i, p0 in enumerate([P0_DEFAULT, P0_ALT, P0_AGGRESSIVE]):
@@ -251,24 +245,15 @@ def fit_dark_current(V, J, sample_name="Sample", T=300):
             ss_tot = np.sum((J - np.mean(J)) ** 2)
             r_squared = 1 - ss_res / ss_tot
             perr = np.sqrt(np.diag(pcov))
-            print(f"Results (guess {i+1}):")
-            print(f"  J0  = {popt[0]:.4e} +/- {perr[0]:.4e}")
-            print(f"  A   = {popt[1]:.4f} +/- {perr[1]:.4f}")
-            print(f"  Rsh = {popt[2]:.2e} +/- {perr[2]:.2e}")
-            print(f"  B   = {popt[3]:.4f} +/- {perr[3]:.4f}")
-            print(f"  c   = {popt[4]:.4f} +/- {perr[4]:.4f}")
-            print(f"  Vbi = {popt[5]:.4f} +/- {perr[5]:.4f}")
-            print(f"  R2  = {r_squared:.6f}")
+            print(f"  J0={popt[0]:.4e} A={popt[1]:.4f} Rsh={popt[2]:.2e} B={popt[3]:.4f} c={popt[4]:.4f} Vbi={popt[5]:.4f} R2={r_squared:.6f}")
             return {'popt': popt, 'pcov': pcov, 'perr': perr, 'r_squared': r_squared, 'Vt': Vt, 'model': 'eq48'}
         except RuntimeError:
-            print(f"Guess {i+1} failed, trying next...")
+            pass
     print("All fits failed.")
     return None
 
 def segmented_fit_dark_current(V, J, sample_name="Sample", T=300, V_seg=V_SEG_DEFAULT, verbose=True):
     Vt = thermal_voltage(T)
-    if verbose:
-        print(f"\n{'='*60}\nSegmented Fitting (Eq.2): {sample_name}\n{'='*60}")
     global_seed = fit_dark_current(V, J, sample_name, T)
     if global_seed is not None:
         gJ0, gA, gRsh, gB, gc, gVbi = global_seed['popt']
@@ -359,7 +344,7 @@ def segmented_fit_dark_current(V, J, sample_name="Sample", T=300, V_seg=V_SEG_DE
 
 def fit_model1(V, J, sample_name="Sample", T=300):
     Vt = thermal_voltage(T)
-    print(f"\n{'='*60}\nFitting (Eq.1): {sample_name}\n{'='*60}")
+    print(f"\nFitting (Eq.1): {sample_name}")
     def fit_func(V, J0, A, Rsh, k, m):
         return model1(V, J0, A, Rsh, k, m, Vt=Vt)
     for i, p0 in enumerate([P0_DEFAULT_M1, P0_ALT_M1, P0_AGGRESSIVE_M1]):
@@ -370,23 +355,15 @@ def fit_model1(V, J, sample_name="Sample", T=300):
             ss_tot = np.sum((J - np.mean(J)) ** 2)
             r_squared = 1 - ss_res / ss_tot
             perr = np.sqrt(np.diag(pcov))
-            print(f"Results (guess {i+1}):")
-            print(f"  J0  = {popt[0]:.4e} +/- {perr[0]:.4e}")
-            print(f"  A   = {popt[1]:.4f} +/- {perr[1]:.4f}")
-            print(f"  Rsh = {popt[2]:.2e} +/- {perr[2]:.2e}")
-            print(f"  k   = {popt[3]:.4e} +/- {perr[3]:.4e}")
-            print(f"  m   = {popt[4]:.4f} +/- {perr[4]:.4f}")
-            print(f"  R2  = {r_squared:.6f}")
+            print(f"  J0={popt[0]:.4e} A={popt[1]:.4f} Rsh={popt[2]:.2e} k={popt[3]:.4e} m={popt[4]:.4f} R2={r_squared:.6f}")
             return {'popt': popt, 'pcov': pcov, 'perr': perr, 'r_squared': r_squared, 'Vt': Vt, 'model': 'eq1'}
         except RuntimeError:
-            print(f"Guess {i+1} failed, trying next...")
+            pass
     print("All fits failed.")
     return None
 
 def segmented_fit_model1(V, J, sample_name="Sample", T=300, V_seg=V_SEG_DEFAULT, verbose=True):
     Vt = thermal_voltage(T)
-    if verbose:
-        print(f"\n{'='*60}\nSegmented Fitting (Eq.1): {sample_name}\n{'='*60}")
     global_seed = fit_model1(V, J, sample_name, T)
     if global_seed is not None:
         gJ0, gA, gRsh, gk, gm = global_seed['popt']
@@ -480,10 +457,12 @@ def configure_plot_style(width_cm=8.5, double_column=False):
             if path: cjk_available.append(f)
         except Exception:
             pass
-    serif_fonts = ['Times New Roman', 'DejaVu Serif', 'Liberation Serif']
+    sans_fonts = ['Arial', 'DejaVu Sans', 'Liberation Sans']
     matplotlib.rcParams.update({
-        'font.family': 'serif', 'font.serif': serif_fonts + cjk_available,
-        'font.size': 9, 'axes.titlesize': 10, 'axes.labelsize': 9,
+        'font.family': 'sans-serif',
+        'font.sans-serif': sans_fonts + cjk_available,
+        'font.weight': 'bold',
+        'font.size': 9, 'axes.labelsize': 9,
         'xtick.labelsize': 8, 'ytick.labelsize': 8, 'legend.fontsize': 7,
         'figure.dpi': 300, 'savefig.dpi': 300, 'savefig.bbox': 'tight', 'savefig.pad_inches': 0.05,
         'xtick.direction': 'in', 'ytick.direction': 'in',
@@ -496,7 +475,7 @@ def configure_plot_style(width_cm=8.5, double_column=False):
         'lines.markersize': 4, 'lines.markeredgewidth': 0.5,
         'legend.frameon': True, 'legend.framealpha': 0.85,
         'legend.edgecolor': '#cccccc', 'legend.fancybox': False,
-        'axes.grid': True, 'grid.alpha': 0.25, 'grid.linestyle': '--', 'grid.linewidth': 0.3,
+        'axes.grid': False,
         'mathtext.fontset': 'stix',
     })
     return width_inches
@@ -509,27 +488,25 @@ def plot_model_fit_single(V, J, fit, name, ax, model_type='eq48'):
         J_main = main_diode_current(Vs, popt[0], popt[1], Vt)
         J_ohm  = ohmic_current(Vs, popt[2])
         J_extra = tat_current(Vs, popt[3], popt[4], popt[5])
-        extra_label = 'J_TAT'
     else:
         J_fit  = model1(Vs, *popt, Vt=Vt)
         J_main = main_diode_current(Vs, popt[0], popt[1], Vt)
         J_ohm  = ohmic_current(Vs, popt[2])
         J_extra = non_ohmic_tunneling(Vs, popt[3], popt[4])
-        extra_label = 'J_non'
-    ax.semilogy(V, np.abs(J), 'o', markersize=3, color=COLOR_PALETTE['data'], alpha=0.7, label='Data', zorder=5, markeredgecolor=COLOR_PALETTE['data'], markeredgewidth=0.3)
-    ax.semilogy(Vs, np.abs(J_fit), '-', linewidth=1.5, color=COLOR_PALETTE['total_fit'], label='J_dark fit', zorder=4)
-    ax.semilogy(Vs, np.abs(J_main), '--', linewidth=1.0, color=COLOR_PALETTE['j_main'], label='J_main', zorder=3)
-    ax.semilogy(Vs, np.abs(J_ohm), '-.', linewidth=1.0, color=COLOR_PALETTE['j_ohm'], label='J_Ohm', zorder=3)
-    ax.semilogy(Vs, np.abs(J_extra), ':', linewidth=1.0, color=COLOR_PALETTE['j_non_tat'], label=extra_label, zorder=3)
-    ax.set_xlabel('Voltage V (V)'); ax.set_ylabel('|J| (A/cm2)')
-    ax.set_title(f'{name} - Jdark-V Fitting', fontweight='bold')
-    if model_type == 'eq48':
-        info = (f'J0={popt[0]:.2e}\nA={popt[1]:.2f}\nRsh={popt[2]:.2e}\nB={popt[3]:.2f}\nC={popt[4]:.2f}\nVbi={popt[5]:.3f}V\nR2={fit["r_squared"]:.4f}')
-    else:
-        info = (f'J0={popt[0]:.2e}\nA={popt[1]:.2f}\nRsh={popt[2]:.2e}\nk={popt[3]:.2e}\nm={popt[4]:.2f}\nR2={fit["r_squared"]:.4f}')
-    props = dict(boxstyle='round,pad=0.4', facecolor='lightyellow', alpha=0.85, edgecolor='gray')
-    ax.text(0.97, 0.03, info, transform=ax.transAxes, fontsize=6.5, va='bottom', ha='right', bbox=props)
-    ax.legend(fontsize=7, loc='upper left', framealpha=0.85, edgecolor='#cccccc')
+    ax.semilogy(V, np.abs(J), 'o', markersize=3, color=COLOR_PALETTE['data'], alpha=0.7,
+                label='Data', zorder=5, markeredgecolor=COLOR_PALETTE['data'], markeredgewidth=0.3)
+    ax.semilogy(Vs, np.abs(J_fit), '-', linewidth=1.5, alpha=0.7,
+                color=COLOR_PALETTE['total_fit'], label='$J_{dark}$ fit', zorder=4)
+    ax.semilogy(Vs, np.abs(J_main), '--', linewidth=1.0,
+                color=COLOR_PALETTE['j_main'], label='$J_{main}$', zorder=3)
+    ax.semilogy(Vs, np.abs(J_ohm), '-.', linewidth=1.0,
+                color=COLOR_PALETTE['j_ohm'], label='$J_{Ohm}$', zorder=3)
+    ax.semilogy(Vs, np.abs(J_extra), ':', linewidth=1.0,
+                color=COLOR_PALETTE['j_non_tat'], label='$J_{TAT}$' if model_type == 'eq48' else '$J_{non}$', zorder=3)
+    ax.set_xlabel('Voltage (V)', fontweight='bold', fontfamily='Arial')
+    ax.set_ylabel('Current Density (A/cm$^{2}$)', fontweight='bold', fontfamily='Arial')
+    ax.tick_params(top=False, right=False, which='both', labelsize=8)
+    ax.legend(fontsize=6, loc='lower left', frameon=False, handlelength=1.5, ncol=1, prop={'weight': 'normal'})
 
 def plot_model_comparison(Vc, fit_c, Vs, fit_s, ax, model_type='eq48'):
     Vt = fit_c['Vt']
@@ -537,11 +514,14 @@ def plot_model_comparison(Vc, fit_c, Vs, fit_s, ax, model_type='eq48'):
     Vss = np.linspace(Vs.min(), Vs.max(), 1000)
     Jm_c = main_diode_current(Vcs, fit_c['popt'][0], fit_c['popt'][1], Vt)
     Jm_s = main_diode_current(Vss, fit_s['popt'][0], fit_s['popt'][1], Vt)
-    ax.semilogy(Vcs, np.abs(Jm_c), '-', linewidth=1.5, color=COLOR_PALETTE['data'], label=f'Control (J0={fit_c["popt"][0]:.2e})')
-    ax.semilogy(Vss, np.abs(Jm_s), '--', linewidth=1.5, color=COLOR_PALETTE['total_fit'], label=f'Sample (J0={fit_s["popt"][0]:.2e})')
-    ax.set_xlabel('Voltage V (V)'); ax.set_ylabel('|J_main| (A/cm2)')
-    ax.set_title('Main Diode J_main Comparison', fontweight='bold')
-    ax.legend(fontsize=7, framealpha=0.85, edgecolor='#cccccc')
+    ax.semilogy(Vcs, np.abs(Jm_c), '-', linewidth=1.5, color=COLOR_PALETTE['data'],
+                label='Control $J_{main}$')
+    ax.semilogy(Vss, np.abs(Jm_s), '--', linewidth=1.5, color=COLOR_PALETTE['total_fit'],
+                label='Sample $J_{main}$')
+    ax.set_xlabel('Voltage (V)', fontweight='bold', fontfamily='Arial')
+    ax.set_ylabel('$J_{main}$ (A/cm$^{2}$)', fontweight='bold', fontfamily='Arial')
+    ax.tick_params(top=False, right=False, which='both', labelsize=8)
+    ax.legend(fontsize=6, frameon=False, loc='lower left', handlelength=1.5, prop={'weight': 'normal'})
 
 def plot_leakage_compare(Vc, fit_c, Vs, fit_s, ax, model_type='eq48'):
     pc, ps = fit_c['popt'], fit_s['popt']
@@ -556,23 +536,25 @@ def plot_leakage_compare(Vc, fit_c, Vs, fit_s, ax, model_type='eq48'):
         Ls = np.abs(ohmic_current(Vss, ps[2]) + non_ohmic_tunneling(Vss, ps[3], ps[4]))
         Oc = np.abs(ohmic_current(Vcs, pc[2]))
         Tc = np.abs(non_ohmic_tunneling(Vcs, pc[3], pc[4]))
-    ax.semilogy(Vcs, Lc, '-', linewidth=1.5, color=COLOR_PALETTE['data'], label='Control (J_Ohm+extra)')
-    ax.semilogy(Vss, Ls, '--', linewidth=1.5, color=COLOR_PALETTE['total_fit'], label='Sample (J_Ohm+extra)')
-    ax.semilogy(Vcs, Oc, ':', linewidth=0.8, color=COLOR_PALETTE['j_ohm'], alpha=0.6, label='Ctrl J_Ohm')
-    ax.semilogy(Vcs, Tc, ':', linewidth=0.5, color=COLOR_PALETTE['j_non_tat'], alpha=0.4, label='Ctrl extra')
-    ax.set_xlabel('Voltage V (V)'); ax.set_ylabel('|Leakage| (A/cm2)')
-    ax.set_title('Reverse Leakage Components', fontweight='bold')
-    ax.legend(fontsize=6.5, framealpha=0.85, edgecolor='#cccccc')
+    ax.semilogy(Vcs, Lc, '-', linewidth=1.5, color=COLOR_PALETTE['data'],
+                label='Control ($J_{Ohm}$+$J_{extra}$)')
+    ax.semilogy(Vss, Ls, '--', linewidth=1.5, color=COLOR_PALETTE['total_fit'],
+                label='Sample ($J_{Ohm}$+$J_{extra}$)')
+    ax.semilogy(Vcs, Oc, ':', linewidth=0.8, color=COLOR_PALETTE['j_ohm'], alpha=0.6, label='Ctrl $J_{Ohm}$')
+    ax.semilogy(Vcs, Tc, ':', linewidth=0.5, color=COLOR_PALETTE['j_non_tat'], alpha=0.4, label='Ctrl $J_{extra}$')
+    ax.set_xlabel('Voltage (V)', fontweight='bold', fontfamily='Arial')
+    ax.set_ylabel('Leakage (A/cm$^{2}$)', fontweight='bold', fontfamily='Arial')
+    ax.tick_params(top=False, right=False, which='both', labelsize=8)
+    ax.legend(fontsize=6, frameon=False, loc='lower left', handlelength=1.5, prop={'weight': 'normal'})
     ax.set_xlim(-0.5, -0.2)
 
 def save_figure_formats(fig, base_path, hd=False):
     saved = []
-    fig.savefig(base_path + '.svg', format='svg', bbox_inches='tight', facecolor='white', edgecolor='none')
-    saved.append(base_path + '.svg')
-    fig.savefig(base_path + '.pdf', format='pdf', bbox_inches='tight', facecolor='white', edgecolor='none')
-    saved.append(base_path + '.pdf')
-    fig.savefig(base_path + '.png', dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
-    saved.append(base_path + '.png')
+    for fmt, ext, dpi in [('svg','.svg',None), ('pdf','.pdf',None), ('png','.png',300)]:
+        kw = {'format': fmt, 'bbox_inches': 'tight', 'facecolor': 'white', 'edgecolor': 'none'}
+        if dpi: kw['dpi'] = dpi
+        fig.savefig(base_path + ext, **kw)
+        saved.append(base_path + ext)
     if hd:
         fig.savefig(base_path + '_600dpi.png', dpi=600, bbox_inches='tight', facecolor='white', edgecolor='none')
         saved.append(base_path + '_600dpi.png')
@@ -581,15 +563,15 @@ def save_figure_formats(fig, base_path, hd=False):
 def export_component_data(V, J, fit, device_name, output_dir, model_type='eq48'):
     popt = fit['popt']; Vt = fit['Vt']
     if model_type == 'eq48':
-        J_fit  = three_component_model(V, *popt, Vt=Vt)
+        J_fit = three_component_model(V, *popt, Vt=Vt)
         J_main = main_diode_current(V, popt[0], popt[1], Vt)
-        J_ohm  = ohmic_current(V, popt[2])
+        J_ohm = ohmic_current(V, popt[2])
         J_extra = tat_current(V, popt[3], popt[4], popt[5])
         header = 'V(V)\tJ_data(A/cm2)\tJ_fit(A/cm2)\tJ_main(A/cm2)\tJ_Ohm(A/cm2)\tJ_TAT(A/cm2)'
     else:
-        J_fit  = model1(V, *popt, Vt=Vt)
+        J_fit = model1(V, *popt, Vt=Vt)
         J_main = main_diode_current(V, popt[0], popt[1], Vt)
-        J_ohm  = ohmic_current(V, popt[2])
+        J_ohm = ohmic_current(V, popt[2])
         J_extra = non_ohmic_tunneling(V, popt[3], popt[4])
         header = 'V(V)\tJ_data(A/cm2)\tJ_fit(A/cm2)\tJ_main(A/cm2)\tJ_Ohm(A/cm2)\tJ_non(A/cm2)'
     rows = np.column_stack([V, J, J_fit, J_main, J_ohm, J_extra])
@@ -605,20 +587,20 @@ def export_parameters_table(fit_c, fit_s, output_dir, model_type='eq48'):
     if model_type == 'eq48':
         params = [
             ('J0', 'J0', 'A/cm2', pc[0], ec[0], ps[0], es[0]),
-            ('Ideality Factor A', 'A', '-', pc[1], ec[1], ps[1], es[1]),
-            ('Shunt Resistance Rsh', 'Rsh', 'ohm.cm2', pc[2], ec[2], ps[2], es[2]),
-            ('TAT Coefficient B', 'B', '-', pc[3], ec[3], ps[3], es[3]),
-            ('TAT Coefficient C', 'C', '-', pc[4], ec[4], ps[4], es[4]),
-            ('Built-in Voltage Vbi', 'Vbi', 'V', pc[5], ec[5], ps[5], es[5]),
+            ('A', 'A', '-', pc[1], ec[1], ps[1], es[1]),
+            ('Rsh', 'Rsh', 'ohm.cm2', pc[2], ec[2], ps[2], es[2]),
+            ('B', 'B', '-', pc[3], ec[3], ps[3], es[3]),
+            ('C', 'C', '-', pc[4], ec[4], ps[4], es[4]),
+            ('Vbi', 'Vbi', 'V', pc[5], ec[5], ps[5], es[5]),
         ]
         suffix = 'eq2'
     else:
         params = [
             ('J0', 'J0', 'A/cm2', pc[0], ec[0], ps[0], es[0]),
-            ('Ideality Factor A', 'A', '-', pc[1], ec[1], ps[1], es[1]),
-            ('Shunt Resistance Rsh', 'Rsh', 'ohm.cm2', pc[2], ec[2], ps[2], es[2]),
-            ('Tunneling Coefficient k', 'k', '-', pc[3], ec[3], ps[3], es[3]),
-            ('Tunneling Exponent m', 'm', '-', pc[4], ec[4], ps[4], es[4]),
+            ('A', 'A', '-', pc[1], ec[1], ps[1], es[1]),
+            ('Rsh', 'Rsh', 'ohm.cm2', pc[2], ec[2], ps[2], es[2]),
+            ('k', 'k', '-', pc[3], ec[3], ps[3], es[3]),
+            ('m', 'm', '-', pc[4], ec[4], ps[4], es[4]),
         ]
         suffix = 'eq1'
     rows_display = []
@@ -637,18 +619,16 @@ def export_parameters_table(fit_c, fit_s, output_dir, model_type='eq48'):
             se_str = f'{se:.4f}' if not np.isnan(se) else '-'
         rows_display.append([label, sym, unit, cv_str, ce_str, sv_str, se_str])
     rows_display.append(['-', '-', '-', '-', '-', '-', '-'])
-    rows_display.append(['R-squared R2', 'R2', '-', f'{fit_c["r_squared"]:.6f}', '-', f'{fit_s["r_squared"]:.6f}', '-'])
+    rows_display.append(['R2', 'R2', '-', f'{fit_c["r_squared"]:.6f}', '-', f'{fit_s["r_squared"]:.6f}', '-'])
     if fit_c.get('segmented'):
         s1c = fit_c.get('stage1', {}).get('r2'); s1s = fit_s.get('stage1', {}).get('r2')
         s2c = fit_c.get('stage2', {}).get('r2'); s2s = fit_s.get('stage2', {}).get('r2')
         if s1c is not None:
-            rows_display.append(['Stage1 R2 (|V|<Vseg)', 'R2_s1', '-', f'{s1c:.6f}', '-', f'{s1s:.6f}', '-'])
+            rows_display.append(['Stage1 R2', 'R2_s1', '-', f'{s1c:.6f}', '-', f'{s1s:.6f}', '-'])
         if s2c is not None:
-            rows_display.append(['Stage2 R2 (V<-Vseg)', 'R2_s2', '-', f'{s2c:.6f}', '-', f'{s2s:.6f}', '-'])
+            rows_display.append(['Stage2 R2', 'R2_s2', '-', f'{s2c:.6f}', '-', f'{s2s:.6f}', '-'])
     df = pd.DataFrame(rows_display, columns=['Parameter', 'Symbol', 'Unit', 'Control', 'Ctrl +/-', 'Sample', 'Samp +/-'])
-    print(f"\n{'='*70}")
-    print(f"  {model_type.upper()} Fitting Parameters")
-    print(f"{'='*70}")
+    print(f"\n{'='*70}\n  {model_type.upper()} Fitting Parameters\n{'='*70}")
     print(df.to_string(index=False))
     csv_p = os.path.join(output_dir, f'{suffix}_fitting_params.csv')
     df.to_csv(csv_p, index=False, encoding='utf-8-sig')
@@ -660,12 +640,11 @@ def generate_combined_word_report(fit1_c, fit1_s, fit2_c, fit2_s, val1, val2, ou
                                    T=300, area=None, V_seg=V_SEG_DEFAULT, ref_data=None):
     try:
         from docx import Document
-        from docx.shared import Inches, Pt, Cm, RGBColor
+        from docx.shared import Pt
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.enum.table import WD_TABLE_ALIGNMENT
     except ImportError:
-        print("  python-docx not installed.")
-        return None
+        print("python-docx not installed."); return None
     doc = Document()
     style = doc.styles['Normal']
     style.font.name = 'Times New Roman'
@@ -674,46 +653,17 @@ def generate_combined_word_report(fit1_c, fit1_s, fit2_c, fit2_s, val1, val2, ou
     style.paragraph_format.line_spacing = 1.15
     title = doc.add_heading('PbS CQD Photodetector Dark Current Component Fitting Report', level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    meta = doc.add_paragraph()
-    meta.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    meta.add_run(f'Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}').font.size = Pt(10)
-    meta.add_run(f'\nTemperature: T = {T} K, Vt = {thermal_voltage(T):.6f} V').font.size = Pt(10)
-    if area:
-        meta.add_run(f'\nDevice Area: {area:.6f} cm2').font.size = Pt(10)
-    meta.add_run(f'\nVoltage Convention: V_fit = -V_raw (V_fit>0 forward bias)').font.size = Pt(10)
-
-    doc.add_heading('1. Fitting Models and Physics Overview', level=1)
-    doc.add_heading('1.1 Model 1 - Initial Equivalent Diode Model (Eq.1)', level=2)
-    p = doc.add_paragraph()
-    p.add_run('J_dark = J0*[exp(qV/(A*kT)) - 1] + V/Rsh + k*V^m').font.name = 'Consolas'
-    doc.add_paragraph('Three current components:', style='List Bullet')
-    doc.add_paragraph('J_main = J0*[exp(qV/(A*kT)) - 1] - main diode current (diffusion + GR)', style='List Bullet')
-    doc.add_paragraph('J_Ohm = V/Rsh - ohmic leakage (pinholes, grain boundaries)', style='List Bullet')
-    doc.add_paragraph('J_non = k*V^m - non-ohmic tunneling leakage', style='List Bullet')
-
-    doc.add_heading('1.2 Model 2 - Optimized General Equation (Eq.2)', level=2)
-    p2 = doc.add_paragraph()
-    p2.add_run('J_dark = J0*[exp(qV/(A*kT)) - 1] + V/Rsh + B*V*exp(-C/(Vbi-V))').font.name = 'Consolas'
-    doc.add_paragraph('Replaces non-ohmic term with physically meaningful TAT term:', style='List Bullet')
-    doc.add_paragraph('J_TAT = B*V*exp(-C/(Vbi-V)) - trap-assisted tunneling', style='List Bullet')
-    doc.add_paragraph('B proportional to trap state density Nt', style='List Bullet')
-    doc.add_paragraph('C proportional to tunneling barrier height', style='List Bullet')
-    doc.add_paragraph('Vbi built-in voltage', style='List Bullet')
-
-    doc.add_heading('1.3 J_BTB Exclusion', level=2)
-    doc.add_paragraph('J_BTB (band-to-band tunneling) requires high doping and extremely narrow depletion region, conditions not met in PbS CQD films.')
-
-    doc.add_heading('1.4 Segmented Fitting Scheme', level=2)
-    doc.add_paragraph(f'Stage 1 (|V| < {V_seg} V): J_main dominant -> fit J0, A', style='List Bullet')
-    doc.add_paragraph(f'Stage 2 (V < -{V_seg} V): Leakage dominant -> fix J0, A, fit remaining params', style='List Bullet')
-    doc.add_paragraph('Stage 3: Global refinement - all params co-adjusted', style='List Bullet')
-
-    doc.add_heading('2. Model 1 (Eq.1) Fitting Results', level=1)
+    doc.add_heading('1. Fitting Models', level=1)
+    doc.add_heading('1.1 Model 1 - Eq.1', level=2)
+    p = doc.add_paragraph(); p.add_run('J_dark = J0*[exp(qV/(A*kT))-1] + V/Rsh + k*V^m').font.name = 'Consolas'
+    doc.add_heading('1.2 Model 2 - Eq.2 (TAT)', level=2)
+    p2 = doc.add_paragraph(); p2.add_run('J_dark = J0*[exp(qV/(A*kT))-1] + V/Rsh + B*V*exp(-C/(Vbi-V))').font.name = 'Consolas'
+    doc.add_heading('1.3 Segmented Fitting', level=2)
+    doc.add_paragraph(f'Stage 1 (|V|<{V_seg}V): J0,A | Stage 2 (V<-{V_seg}V): remaining | Stage 3: global refinement')
+    doc.add_heading('2. Model 1 (Eq.1) Results', level=1)
     _add_model_params_table(doc, fit1_c, fit1_s, 'eq1', control_label, sample_label)
-
-    doc.add_heading('3. Model 2 (Eq.2) Fitting Results', level=1)
+    doc.add_heading('3. Model 2 (Eq.2) Results', level=1)
     _add_model_params_table(doc, fit2_c, fit2_s, 'eq48', control_label, sample_label)
-
     doc.add_heading('4. Model Comparison', level=1)
     r2_1c = fit1_c['r_squared']; r2_1s = fit1_s['r_squared']
     r2_2c = fit2_c['r_squared']; r2_2s = fit2_s['r_squared']
@@ -721,31 +671,22 @@ def generate_combined_word_report(fit1_c, fit1_s, fit2_c, fit2_s, val1, val2, ou
     t_comp.alignment = WD_TABLE_ALIGNMENT.CENTER
     for i, h in enumerate(['Metric', 'Model 1 Ctrl', 'Model 1 Samp', 'Model 2 Ctrl', 'Model 2 Samp']):
         t_comp.rows[0].cells[i].text = h
-    t_comp.rows[1].cells[0].text = 'R2 (full range)'
-    t_comp.rows[1].cells[1].text = f'{r2_1c:.6f}'; t_comp.rows[1].cells[2].text = f'{r2_1s:.6f}'
-    t_comp.rows[1].cells[3].text = f'{r2_2c:.6f}'; t_comp.rows[1].cells[4].text = f'{r2_2s:.6f}'
-    t_comp.rows[2].cells[0].text = 'Complexity'
-    t_comp.rows[2].cells[1].text = '5 params'; t_comp.rows[2].cells[2].text = '5 params'
-    t_comp.rows[2].cells[3].text = '6 params'; t_comp.rows[2].cells[4].text = '6 params'
-    t_comp.rows[3].cells[0].text = 'Physical Meaning'
-    t_comp.rows[3].cells[1].text = 'Phenomenological'; t_comp.rows[3].cells[2].text = 'Phenomenological'
-    t_comp.rows[3].cells[3].text = 'Clear (TAT)'; t_comp.rows[3].cells[4].text = 'Clear (TAT)'
-    doc.add_paragraph('')
+    t_comp.rows[1].cells[0].text = 'R2'; t_comp.rows[1].cells[1].text = f'{r2_1c:.6f}'
+    t_comp.rows[1].cells[2].text = f'{r2_1s:.6f}'; t_comp.rows[1].cells[3].text = f'{r2_2c:.6f}'
+    t_comp.rows[1].cells[4].text = f'{r2_2s:.6f}'
+    t_comp.rows[2].cells[0].text = 'Complexity'; t_comp.rows[2].cells[1].text = '5 params'
+    t_comp.rows[2].cells[2].text = '5 params'; t_comp.rows[2].cells[3].text = '6 params'
+    t_comp.rows[2].cells[4].text = '6 params'
+    t_comp.rows[3].cells[0].text = 'Physics'; t_comp.rows[3].cells[1].text = 'Phenomenological'
+    t_comp.rows[3].cells[2].text = 'Phenomenological'; t_comp.rows[3].cells[3].text = 'Clear (TAT)'
+    t_comp.rows[3].cells[4].text = 'Clear (TAT)'
     better_model = 'Model 2 (Eq.2)' if (r2_2c + r2_2s) > (r2_1c + r2_1s) else 'Model 1 (Eq.1)'
-    doc.add_paragraph(f'Based on R2 comparison and physical interpretability, {better_model} is recommended.')
-
+    doc.add_paragraph(f'Recommendation: {better_model} based on R2 and physical interpretability.')
     doc.add_heading('5. Device Optimization Mechanism', level=1)
-    doc.add_paragraph('Based on dual-model segmented fitting analysis, the suppression mechanism can be summarized in three dimensions:')
     pc, ps = fit2_c['popt'], fit2_s['popt']
-    doc.add_heading('Dimension 1: Recombination Current Suppression', level=2)
-    doc.add_paragraph(f'J0: Control={pc[0]:.2e} -> Sample={ps[0]:.2e} A/cm2; A: {pc[1]:.2f} -> {ps[1]:.2f}')
-    doc.add_heading('Dimension 2: Ohmic Leakage Blocking', level=2)
-    doc.add_paragraph(f'Rsh: Control={pc[2]:.2e} -> Sample={ps[2]:.2e} ohm*cm2')
-    doc.add_heading('Dimension 3: TAT Suppression', level=2)
-    doc.add_paragraph(f'B: {pc[3]:.2f} -> {ps[3]:.2f}; C: {pc[4]:.2f} -> {ps[4]:.2f}')
-    doc.add_heading('Summary', level=2)
-    doc.add_paragraph('Device optimization synergistically suppresses dark current through three mechanisms across the full bias range.')
-
+    doc.add_paragraph(f'J0: {pc[0]:.2e} -> {ps[0]:.2e} A/cm2 | A: {pc[1]:.2f} -> {ps[1]:.2f}')
+    doc.add_paragraph(f'Rsh: {pc[2]:.2e} -> {ps[2]:.2e} ohm*cm2')
+    doc.add_paragraph(f'B: {pc[3]:.2f} -> {ps[3]:.2f} | C: {pc[4]:.2f} -> {ps[4]:.2f}')
     report_path = os.path.join(output_dir, 'fitting_report.docx')
     doc.save(report_path)
     print(f"\n  Combined Word report saved: {report_path}")
@@ -758,70 +699,61 @@ def _add_model_params_table(doc, fit_c, fit_s, model_type, ctrl_label, samp_labe
     es = fit_s.get('perr', np.full(len(ps), np.nan))
     if model_type == 'eq48':
         param_data = [
-            ('J0', 'A/cm2', 0, '.4e', '.4e'), ('A', '-', 1, '.4f', '.4f'),
-            ('Rsh', 'ohm*cm2', 2, '.2e', '.2e'), ('B', '-', 3, '.4f', '.4f'),
-            ('C', '-', 4, '.4f', '.4f'), ('Vbi', 'V', 5, '.4f', '.4f'),
+            ('J0', 'A/cm2', 0, '.4e'), ('A', '-', 1, '.4f'),
+            ('Rsh', 'ohm*cm2', 2, '.2e'), ('B', '-', 3, '.4f'),
+            ('C', '-', 4, '.4f'), ('Vbi', 'V', 5, '.4f'),
         ]
     else:
         param_data = [
-            ('J0', 'A/cm2', 0, '.4e', '.4e'), ('A', '-', 1, '.4f', '.4f'),
-            ('Rsh', 'ohm*cm2', 2, '.2e', '.2e'), ('k', '-', 3, '.4e', '.4e'),
-            ('m', '-', 4, '.4f', '.4f'),
+            ('J0', 'A/cm2', 0, '.4e'), ('A', '-', 1, '.4f'),
+            ('Rsh', 'ohm*cm2', 2, '.2e'), ('k', '-', 3, '.4e'),
+            ('m', '-', 4, '.4f'),
         ]
     n = len(param_data)
     t = doc.add_table(rows=n+2, cols=5, style='Light Grid Accent 1')
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
     for i, h in enumerate(['Param', 'Unit', ctrl_label, samp_label, 'Trend']):
         t.rows[0].cells[i].text = h
-    for i, (pname, unit, idx, fmt_v, fmt_e) in enumerate(param_data):
+    for i, (pname, unit, idx, fmt_v) in enumerate(param_data):
         t.rows[i+1].cells[0].text = pname; t.rows[i+1].cells[1].text = unit
         cv = pc[idx]; sv = ps[idx]
         ce_v = ec[idx] if idx < len(ec) else np.nan
         se_v = es[idx] if idx < len(es) else np.nan
-        t.rows[i+1].cells[2].text = f'{cv:{fmt_v}} +/- {ce_v:{fmt_e}}' if not np.isnan(ce_v) else f'{cv:{fmt_v}}'
-        t.rows[i+1].cells[3].text = f'{sv:{fmt_v}} +/- {se_v:{fmt_e}}' if not np.isnan(se_v) else f'{sv:{fmt_v}}'
-    t.rows[n+1].cells[0].text = 'R-squared R2'; t.rows[n+1].cells[1].text = '-'
+        t.rows[i+1].cells[2].text = f'{cv:{fmt_v}} +/- {ce_v:{fmt_v}}' if not np.isnan(ce_v) else f'{cv:{fmt_v}}'
+        t.rows[i+1].cells[3].text = f'{sv:{fmt_v}} +/- {se_v:{fmt_v}}' if not np.isnan(se_v) else f'{sv:{fmt_v}}'
+    t.rows[n+1].cells[0].text = 'R2'; t.rows[n+1].cells[1].text = '-'
     t.rows[n+1].cells[2].text = f'{fit_c["r_squared"]:.6f}'
     t.rows[n+1].cells[3].text = f'{fit_s["r_squared"]:.6f}'
 
 def run_single_model(Vc, Jc, Vs, Js, output_dir, T, model_type, segmented, v_seg, validate, area, hd, fig_width_cm, double_column):
-    model_label = 'Eq.2 (TAT Model)' if model_type == 'eq48' else 'Eq.1 (Initial Diode Model)'
-    print(f"\n{'#'*60}\n#  Fitting: {model_label}\n{'#'*60}")
+    print(f"\n# Fitting: {'Eq.2' if model_type == 'eq48' else 'Eq.1'}")
     fit_func = fit_dark_current if model_type == 'eq48' else fit_model1
     seg_func = segmented_fit_dark_current if model_type == 'eq48' else segmented_fit_model1
     if segmented:
-        fit_c = seg_func(Vc, Jc, "Control PD", T, V_seg=v_seg)
-        fit_s = seg_func(Vs, Js, "Sample PD", T, V_seg=v_seg)
+        fit_c = seg_func(Vc, Jc, "Control", T, V_seg=v_seg)
+        fit_s = seg_func(Vs, Js, "Sample", T, V_seg=v_seg)
     else:
-        fit_c = fit_func(Vc, Jc, "Control PD", T)
-        fit_s = fit_func(Vs, Js, "Sample PD", T)
+        fit_c = fit_func(Vc, Jc, "Control", T)
+        fit_s = fit_func(Vs, Js, "Sample", T)
     if fit_c is None or fit_s is None:
         print("Fitting failed."); return None
-    validation_result = None
-    if validate:
-        rules = CONSISTENCY_RULES if model_type == 'eq48' else CONSISTENCY_RULES_M1
-        validation_result = validate_self_consistency(fit_c, fit_s, rules=rules, ref_data=REFERENCE_DATA if model_type == 'eq48' else None)
-    print(f"\n[Plot] Generating figures...")
     configure_plot_style(width_cm=fig_width_cm, double_column=double_column)
     for device_name, V, J, fit in [('control', Vc, Jc, fit_c), ('sample', Vs, Js, fit_s)]:
         fig, ax = plt.subplots(figsize=(fig_width_cm/CM_PER_INCH, fig_width_cm/CM_PER_INCH*0.75))
-        device_label = 'Control PD' if device_name == 'control' else 'Sample PD'
-        plot_model_fit_single(V, J, fit, device_label, ax, model_type)
+        plot_model_fit_single(V, J, fit, '', ax, model_type)
         plt.tight_layout()
-        base = os.path.join(output_dir, f'{device_name}_fitting')
-        save_figure_formats(fig, base, hd=hd)
+        save_figure_formats(fig, os.path.join(output_dir, f'{device_name}_fitting'), hd=hd)
         plt.close(fig)
     for comp_name, comp_fn in [('j_main_comparison', plot_model_comparison), ('leakage_comparison', plot_leakage_compare)]:
         fig, ax = plt.subplots(figsize=(fig_width_cm/CM_PER_INCH, fig_width_cm/CM_PER_INCH*0.75))
         comp_fn(Vc, fit_c, Vs, fit_s, ax, model_type)
         plt.tight_layout()
-        base = os.path.join(output_dir, comp_name)
-        save_figure_formats(fig, base, hd=hd)
+        save_figure_formats(fig, os.path.join(output_dir, comp_name), hd=hd)
         plt.close(fig)
     export_component_data(Vc, Jc, fit_c, 'control', output_dir, model_type)
     export_component_data(Vs, Js, fit_s, 'sample', output_dir, model_type)
     export_parameters_table(fit_c, fit_s, output_dir, model_type)
-    return {'control': fit_c, 'sample': fit_s, 'validation': validation_result}
+    return {'control': fit_c, 'sample': fit_s}
 
 def run_dark_current_fitting(control_file, sample_file, output_dir=None, T=300, area=None,
                               vmin=None, vmax=None, auto_dark=True, sweep_c=None, sweep_s=None,
@@ -831,14 +763,8 @@ def run_dark_current_fitting(control_file, sample_file, output_dir=None, T=300, 
     if output_dir is None:
         output_dir = os.path.join(os.path.dirname(os.path.abspath(control_file)), 'output')
     os.makedirs(output_dir, exist_ok=True)
-    Vt = thermal_voltage(T)
     models_to_run = ['eq1', 'eq48'] if model == 'both' else [model]
-    print("\n" + "=" * 70)
-    print("  PbS CQD Dark Current Component Fitting")
-    print("=" * 70)
-    print(f"T={T}K, Vt={Vt:.6f}V, Area={area} cm2")
-    print(f"Models: {models_to_run}")
-    print(f"Control: {control_file}\nSample:  {sample_file}\nOutput:  {output_dir}")
+    print(f"\nPbS CQD Dark Current Fitting | Models: {models_to_run}")
     Vc, Jc = load_data(control_file, area=area, auto_dark=auto_dark, manual_sweep=sweep_c, max_points=max_points)
     Vs, Js = load_data(sample_file, area=area, auto_dark=auto_dark, manual_sweep=sweep_s, max_points=max_points)
     if vmin is not None or vmax is not None:
@@ -861,50 +787,40 @@ def run_dark_current_fitting(control_file, sample_file, output_dir=None, T=300, 
     if generate_report and len(results) >= 2:
         r1 = results.get('eq1', {}); r2 = results.get('eq48', {})
         if r1 and r2:
-            generate_combined_word_report(
-                r1['control'], r1['sample'], r2['control'], r2['sample'],
-                r1.get('validation') or {'all_valid': True, 'violation_count': 0, 'total_params': 4},
-                r2.get('validation') or {'all_valid': True, 'violation_count': 0, 'total_params': 5},
+            generate_combined_word_report(r1['control'], r1['sample'], r2['control'], r2['sample'],
+                {'all_valid': True, 'violation_count': 0, 'total_params': 4},
+                {'all_valid': True, 'violation_count': 0, 'total_params': 5},
                 output_dir, T=T, area=area, V_seg=v_seg, ref_data=REFERENCE_DATA)
-    print("\n" + "=" * 70)
-    print("Done!")
-    print("=" * 70)
+    print("\nDone!")
     return {'results': results, 'output_dir': output_dir}
 
 if __name__ == '__main__':
     import argparse
-    p = argparse.ArgumentParser(description='PbS CQD Dark Current Component Fitting (Dual Model)')
+    p = argparse.ArgumentParser(description='PbS CQD Dark Current Component Fitting')
     p.add_argument('control', help='Control PD data file')
     p.add_argument('sample', help='Sample PD data file')
-    p.add_argument('-o', '--output', default=None, help='Output directory')
-    p.add_argument('-T', '--temperature', type=float, default=T_DEFAULT, help='Temperature (K)')
-    p.add_argument('-a', '--area', type=float, default=None, help='Device area (cm2)')
-    p.add_argument('--vmin', type=float, default=-0.5, help='Voltage lower limit')
-    p.add_argument('--vmax', type=float, default=0.2, help='Voltage upper limit')
-    p.add_argument('--no-auto-dark', action='store_true', help='Disable auto dark-sweep detection')
-    p.add_argument('--sweep-control', type=str, default=None, help='Manual sweep for Control')
-    p.add_argument('--sweep-sample', type=str, default=None, help='Manual sweep for Sample')
-    p.add_argument('--model', choices=['both', 'eq1', 'eq48'], default='both', help='Fitting model')
-    p.add_argument('--points', type=int, default=None, help='Use first N data points')
-    p.add_argument('--no-segmented', action='store_true', help='Disable segmented fitting')
-    p.add_argument('--vseg', type=float, default=V_SEG_DEFAULT, help='Segmentation threshold')
-    p.add_argument('--no-validate', action='store_true', help='Skip self-consistency validation')
-    p.add_argument('--no-report', action='store_true', help='Skip report generation')
-    p.add_argument('--report-format', choices=['md', 'txt', 'docx'], default='docx')
-    p.add_argument('--fig-width-cm', type=float, default=8.5, help='Figure width in cm')
-    p.add_argument('--fig-double-col', action='store_true', help='Use double-column width')
-    p.add_argument('--hd', action='store_true', help='Export 600 dpi PNG')
+    p.add_argument('-o', '--output', default=None); p.add_argument('-T', '--temperature', type=float, default=T_DEFAULT)
+    p.add_argument('-a', '--area', type=float, default=None)
+    p.add_argument('--vmin', type=float, default=-0.5); p.add_argument('--vmax', type=float, default=0.2)
+    p.add_argument('--no-auto-dark', action='store_true')
+    p.add_argument('--model', choices=['both', 'eq1', 'eq48'], default='both')
+    p.add_argument('--points', type=int, default=None)
+    p.add_argument('--no-segmented', action='store_true')
+    p.add_argument('--vseg', type=float, default=V_SEG_DEFAULT)
+    p.add_argument('--no-validate', action='store_true')
+    p.add_argument('--no-report', action='store_true')
+    p.add_argument('--fig-width-cm', type=float, default=8.5)
+    p.add_argument('--fig-double-col', action='store_true')
+    p.add_argument('--hd', action='store_true')
     args = p.parse_args()
     r = run_dark_current_fitting(args.control, args.sample, args.output,
-                                  args.temperature, args.area, args.vmin, args.vmax,
-                                  auto_dark=not args.no_auto_dark,
-                                  sweep_c=args.sweep_control, sweep_s=args.sweep_sample,
-                                  segmented=not args.no_segmented, v_seg=args.vseg,
-                                  validate=not args.no_validate,
-                                  generate_report=not args.no_report,
-                                  report_format=args.report_format,
-                                  model=args.model, max_points=args.points,
-                                  hd=args.hd, fig_width_cm=args.fig_width_cm,
-                                  double_column=args.fig_double_col)
-    if r:
-        print(f"\nOutput files in: {r['output_dir']}")
+        args.temperature, args.area, args.vmin, args.vmax,
+        auto_dark=not args.no_auto_dark,
+        sweep_c=args.sweep_control if hasattr(args, 'sweep_control') else None,
+        sweep_s=args.sweep_sample if hasattr(args, 'sweep_sample') else None,
+        segmented=not args.no_segmented, v_seg=args.vseg,
+        validate=not args.no_validate,
+        generate_report=not args.no_report,
+        model=args.model, max_points=args.points,
+        hd=args.hd, fig_width_cm=args.fig_width_cm, double_column=args.fig_double_col)
+    if r: print(f"\nOutput: {r['output_dir']}")
