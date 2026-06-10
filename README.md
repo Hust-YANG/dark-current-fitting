@@ -46,14 +46,14 @@ A Python tool for quantitative multi-mechanism dark current component fitting of
 <p align="center">
 Figure 1. Dark current J-V characteristics and multi-mechanism fitting results. 
 </p>
+
+
+## Usage
 ## Installation
 
 ```bash
 pip install numpy scipy matplotlib pandas python-docx
 ```
-
-## Usage
-
 ```bash
 python scripts/dark_current_fitting.py sample.txt -a 0.0707 --points 201 --hd
 ```
