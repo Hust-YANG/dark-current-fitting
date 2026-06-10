@@ -2,7 +2,8 @@ __pycache__/
 *.pyc
 *.pyo
 output/
-result/
+out*/
+result*/
 *.docx
 *.pdf
 *.png

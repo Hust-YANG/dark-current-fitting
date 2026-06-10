@@ -1,18 +1,10 @@
 # Dark Current Fitting Skill
 
-## Purpose
+Analyze Jdark-V of PbS CQD photodetectors using three-component TAT model.
+Segmented fitting with journal-ready plots and academic Word report.
 
-Analyze Jdark-V characteristics of PbS CQD photodetectors using dual-model fitting
-(Model 1 Eq.1 + Model 2 Eq.2 TAT). Segmented fitting with journal-ready plots.
+## Model
 
-## Models
-
-### Model 1 (Eq.1)
-```
-J_dark = J0*[exp(qV/(A*kT)) - 1] + V/Rsh + k*V^m
-```
-
-### Model 2 (Eq.2)
 ```
 J_dark = J0*[exp(qV/(A*kT)) - 1] + V/Rsh + B*V*exp(-c/(Vbi-V))
 ```
@@ -20,7 +12,7 @@ J_dark = J0*[exp(qV/(A*kT)) - 1] + V/Rsh + B*V*exp(-c/(Vbi-V))
 ## Usage
 
 ```bash
-python scripts/dark_current_fitting.py <control.txt> <sample.txt> [options]
+python scripts/dark_current_fitting.py sample.txt -a 0.07 --points 201 --hd
 ```
 
-See SKILL.md for full documentation.
+See SKILL.md for details.
