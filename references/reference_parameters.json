@@ -1,12 +1,14 @@
 {
+  "_model_version": "2.0 — Implicit diode model with R_S and power-law tunneling",
+  "_legacy_note": "Reference parameters below are from the legacy TAT model (J_dark = J0·[exp(qV/AkT)-1] + V/Rsh + B·V·exp(-C/(Vbi-V))). They do NOT directly map to the current model (J_D = J01·[exp(A1·V_int)-1] + J02·[exp(A2·V_int)-1] + V_int/R_SH + k·V_int^m). Kept for historical reference.",
   "paper_reference": "Table 4.3 - 4-AMPY ligand passivation study on PbS CQD photodetectors",
   "j_btb_exclusion": {
-    "rationale": "J_BTB requires high doping and extremely narrow depletion regions (<10 nm), conditions not satisfied in PbS CQD photodetectors (~10^16 cm^-3 doping, ~200-400 nm active layer).",
+    "rationale": "J_BTB (band-to-band tunneling) requires high doping concentrations and extremely narrow depletion regions (typically <10 nm), conditions not satisfied in PbS CQD photodetectors due to their moderate doping levels (~10^16 cm^-3) and relatively thick active layers (~200-400 nm). The CQD film's granular structure and organic ligand matrix further preclude the coherent band bending required for direct band-to-band tunneling.",
     "forbidden": true
   },
-  "reference_parameters": {
+  "legacy_reference_parameters": {
     "control_unpassivated": {
-      "label": "Control PD",
+      "label": "Control PD (Unpassivated)",
       "J0_nA_per_cm2": 148.0,
       "J0_A_per_cm2": 1.48e-7,
       "A": 1.67,
@@ -15,7 +17,7 @@
       "Rsh_ohm_cm2": 1559.0
     },
     "sample_passivated": {
-      "label": "Optimized PD",
+      "label": "4-AMPY (Passivated)",
       "J0_nA_per_cm2": 26.3,
       "J0_A_per_cm2": 2.63e-8,
       "A": 1.44,
@@ -23,5 +25,13 @@
       "C": 11.02,
       "Rsh_ohm_cm2": 12247.0
     }
+  },
+  "self_consistency_rules": {
+    "_note": "For the new model, physical trends remain: passivation should reduce J01/J02 (fewer traps), reduce n1/n2 toward ideality, increase R_SH, and reduce k (tunneling coefficient).",
+    "J01_J02": {"trend": "decrease", "description": "Saturation currents decrease with passivation — fewer recombination centers"},
+    "n1_n2": {"trend": "approach_ideality", "description": "Ideality factors approach n1→1, n2→2 with better passivation"},
+    "R_SH": {"trend": "increase", "description": "Shunt resistance increases — ligand passivation blocks ohmic leakage pathways"},
+    "k": {"trend": "decrease", "description": "Tunneling coefficient decreases — fewer mid-gap trap states for field-assisted tunneling"},
+    "R_S": {"trend": "decrease", "description": "Series resistance may decrease with improved contact quality"}
   }
 }
