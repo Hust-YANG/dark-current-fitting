@@ -49,34 +49,35 @@ COLOR_PALETTE = dict(
 # ── Parameter Bounds ─────────────────────────────────────────────────────────
 # [J01, A1, J02, A2, R_S, R_SH, k, m]
 BOUNDS_DUAL = (
-    [1e-12, 10.0, 1e-12,  5.0,  0.0,  1e3, 1e-10, 1.0],
-    [1e-3,  50.0, 1e-3,   30.0, 1e4,  1e8, 1e2,   6.0]
+    [1e-12, 10.0, 1e-12,  5.0,  0.0,  1e3, 1e-15, 0.5],
+    [1e-3,  50.0, 1e-3,   30.0, 1e4,  1e8, 1e2,   4.5]
 )
 # [J01, A1, R_S, R_SH, k, m]
+# A1 ∈ [30,45] → n1 ∈ [0.86,1.29] (diffusion-only for single-diode)
 BOUNDS_SINGLE = (
-    [1e-12, 10.0, 0.0,  1e3, 1e-10, 1.0],
-    [1e-3,  50.0, 1e4,  1e8, 1e2,   6.0]
+    [1e-12, 30.0, 0.0,  1e3, 1e-15, 0.5],
+    [1e-3,  45.0, 1e4,  1e8, 1e2,   4.5]
 )
 
 # ── Initial Guesses ──────────────────────────────────────────────────────────
 GUESSES_DUAL = [
     # J01       A1     J02       A2     R_S   R_SH    k        m
-    [1e-7,     38.7,  1e-6,    19.3,   1.0,  1e5,   1e-6,   3.0],
-    [1e-8,     40.0,  1e-7,    20.0,  10.0,  1e6,   1e-7,   2.5],
-    [1e-6,     35.0,  1e-5,    17.0,   0.1,  1e4,   1e-5,   3.5],
-    [1e-7,     42.0,  1e-8,    22.0,   5.0,  1e5,   1e-8,   4.0],
-    [1e-9,     38.7,  1e-6,    19.3,  50.0,  1e7,   1e-4,   2.0],
-    [1e-5,     30.0,  1e-4,    15.0,   0.5,  1e3,   1e-9,   5.0],
+    [1e-7,     38.7,  1e-6,    19.3,   1.0,  1e5,   1e-8,   3.0],
+    [1e-8,     40.0,  1e-7,    20.0,  10.0,  1e6,   1e-6,   2.0],
+    [1e-6,     35.0,  1e-5,    17.0,   0.1,  1e4,   1e-9,   4.0],
+    [1e-7,     42.0,  1e-8,    22.0,   5.0,  1e5,   1e-7,   1.5],
+    [1e-9,     38.7,  1e-6,    19.3,  50.0,  1e7,   1e-5,   1.0],
+    [1e-5,     30.0,  1e-4,    15.0,   0.5,  1e3,   1e-10,  3.5],
 ]
 
 GUESSES_SINGLE = [
     # J01       A1     R_S   R_SH    k        m
-    [1e-7,     38.7,   1.0,  1e5,   1e-6,   3.0],
-    [1e-8,     40.0,  10.0,  1e6,   1e-7,   2.5],
-    [1e-6,     35.0,   0.1,  1e4,   1e-5,   3.5],
-    [1e-7,     42.0,   5.0,  1e5,   1e-8,   4.0],
-    [1e-9,     38.7,  50.0,  1e7,   1e-4,   2.0],
-    [1e-5,     30.0,   0.5,  1e3,   1e-9,   5.0],
+    [1e-7,     38.7,   1.0,  1e5,   1e-6,   2.0],
+    [1e-8,     35.0,  10.0,  1e6,   1e-7,   1.0],
+    [1e-6,     42.0,   0.1,  1e4,   1e-5,   3.0],
+    [1e-7,     32.0,   5.0,  1e5,   1e-8,   1.5],
+    [1e-9,     40.0,  50.0,  1e7,   1e-4,   0.8],
+    [1e-5,     44.0,   0.5,  1e3,   1e-10,  3.5],
 ]
 
 
@@ -112,7 +113,7 @@ def _rhs_total(V_int, J01, A1, J02, A2, R_SH, k, m):
 def solve_implicit(V, J01, A1, J02, A2, R_S, R_SH, k, m,
                    max_iter=200, tol=1e-10, verbose=False):
     """
-    Solve the implicit equation J_D = RHS(V - J_D·R_S) via fixed-point iteration.
+    Solve the implicit equation J_D = RHS(V - J_D·R_S) via damped fixed-point iteration.
 
     Parameters
     ----------
@@ -132,14 +133,12 @@ def solve_implicit(V, J01, A1, J02, A2, R_S, R_SH, k, m,
     for i in range(max_iter):
         V_int = V - Jd * R_S
         Jd_new = damping * _rhs_total(V_int, J01, A1, J02, A2, R_SH, k, m) + (1 - damping) * Jd
-        # Check convergence
         diff = np.max(np.abs(Jd_new - Jd))
         if diff < tol:
             if verbose and i > 3:
                 print(f"    Converged in {i+1} iterations")
             return Jd_new, V_int, True
         Jd = Jd_new
-    # Not fully converged — return best effort
     if verbose:
         print(f"    Warning: not converged after {max_iter} iterations, "
               f"max diff = {np.max(np.abs(_rhs_total(V - Jd*R_S, J01, A1, J02, A2, R_SH, k, m) - Jd)):.2e}")
@@ -152,7 +151,7 @@ def solve_implicit(V, J01, A1, J02, A2, R_S, R_SH, k, m,
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def dark_current_dual(V, J01, A1, J02, A2, R_S, R_SH, k, m):
-    """Dual-diode dark current model. Signature matches curve_fit requirements."""
+    """Dual-diode dark current model."""
     Jd, _, _ = solve_implicit(V, J01, A1, J02, A2, R_S, R_SH, k, m)
     return Jd
 
@@ -243,14 +242,7 @@ def _identify_dark(sweeps, fp):
 
 
 def load_data(fp, area=None, auto_dark=True, manual_sweep=None, max_points=None):
-    """
-    Load and preprocess data.
-
-    Returns
-    -------
-    V_fit : ndarray — negated raw voltage (V_fit > 0 = forward bias)
-    J_fit : ndarray — negated raw current / area
-    """
+    """Load and preprocess data. Returns V_fit, J_fit."""
     sweeps, has_marker = _parse_raw_data(fp)
 
     if manual_sweep:
@@ -290,17 +282,11 @@ def thermal_voltage(T):
 
 def fit_dark_current(V, J, model_type='dual', T=300):
     """
-    Global fitting with multiple initial guesses.
-
-    Parameters
-    ----------
-    V, J : ndarray — voltage (V_fit) and current density
-    model_type : 'single' | 'dual'
-    T : float — temperature (K)
-
-    Returns
-    -------
-    dict with keys: popt, r_squared, Vt, n1, n2, model_type, converged
+    Global fitting with multiple initial guesses and physical parameter selection.
+    
+    Uses a scoring function that penalizes fits where the tunneling coefficient k
+    is at the lower bound (k < 1e-10), preventing the optimizer from suppressing
+    physically meaningful tunneling components in favor of marginally higher R².
     """
     Vt = thermal_voltage(T)
 
@@ -318,7 +304,7 @@ def fit_dark_current(V, J, model_type='dual', T=300):
     label = "Single-Diode" if model_type == 'single' else "Dual-Diode"
     print(f"\n=== {label} Global Fitting ===")
 
-    best, best_r2 = None, -np.inf
+    best, best_score = None, -np.inf
     for i, p0 in enumerate(guesses):
         try:
             popt, _ = curve_fit(model_func, V, J, p0=p0, bounds=bounds,
@@ -335,11 +321,19 @@ def fit_dark_current(V, J, model_type='dual', T=300):
                 n2 = 1.0 / (popt[3] * Vt) if popt[3] > 0 else float('inf')
                 n2_str = f" n2={n2:.3f}"
 
+            # Physical penalty: penalize fits where tunneling term is effectively zero
+            k_idx = 6 if model_type == 'dual' else 4
+            score = r2
+            if popt[k_idx] < 1e-10:  # k at lower bound → tunneling suppressed
+                score -= 0.0005  # small penalty to prefer physically meaningful fits
+
             # Format output
             pstr = " ".join(f"{popt[j]:.4e}" for j in range(len(popt)))
-            print(f"  G{i+1}: {pstr} R²={r2:.6f} n1={n1:.3f}{n2_str}")
+            flag = " [k≈0]" if popt[k_idx] < 1e-10 else ""
+            print(f"  G{i+1}: {pstr} R²={r2:.6f} n1={n1:.3f}{n2_str}{flag}")
 
-            if r2 > best_r2:
+            if score > best_score:
+                best_score = score
                 best_r2 = r2
                 best = popt
         except RuntimeError:
@@ -370,15 +364,9 @@ def fit_dark_current(V, J, model_type='dual', T=300):
           (f" n2={n2:.3f}" if n2 is not None else ""))
 
     return {
-        'popt': best,
-        'r_squared': r2,
-        'Vt': Vt,
-        'n1': n1,
-        'n2': n2,
-        'model_type': model_type,
-        'param_names': param_names,
-        'converged': conv,
-        'V_int': V_int,
+        'popt': best, 'r_squared': r2, 'Vt': Vt,
+        'n1': n1, 'n2': n2, 'model_type': model_type,
+        'param_names': param_names, 'converged': conv, 'V_int': V_int,
     }
 
 
@@ -396,28 +384,16 @@ def configure_plot_style(width_cm=8.5):
     matplotlib.rcParams.update({
         'font.family': 'sans-serif',
         'font.sans-serif': ['Arial'] + cjk_avail,
-        'font.size': 9,
-        'axes.labelsize': 9,
-        'xtick.labelsize': 8,
-        'ytick.labelsize': 8,
-        'legend.fontsize': 7,
-        'figure.dpi': 300,
-        'savefig.dpi': 300,
-        'savefig.bbox': 'tight',
-        'savefig.pad_inches': 0.05,
-        'xtick.direction': 'in',
-        'ytick.direction': 'in',
-        'xtick.major.size': 4,
-        'xtick.major.width': 0.8,
-        'ytick.major.size': 4,
-        'ytick.major.width': 0.8,
-        'axes.linewidth': 0.8,
-        'lines.linewidth': 1.2,
-        'lines.markersize': 4,
-        'legend.frameon': True,
-        'legend.framealpha': 0.85,
-        'legend.edgecolor': '#cccccc',
-        'axes.grid': False,
+        'font.size': 9, 'axes.labelsize': 9,
+        'xtick.labelsize': 8, 'ytick.labelsize': 8,
+        'legend.fontsize': 7, 'figure.dpi': 300, 'savefig.dpi': 300,
+        'savefig.bbox': 'tight', 'savefig.pad_inches': 0.05,
+        'xtick.direction': 'in', 'ytick.direction': 'in',
+        'xtick.major.size': 4, 'xtick.major.width': 0.8,
+        'ytick.major.size': 4, 'ytick.major.width': 0.8,
+        'axes.linewidth': 0.8, 'lines.linewidth': 1.2, 'lines.markersize': 4,
+        'legend.frameon': True, 'legend.framealpha': 0.85,
+        'legend.edgecolor': '#cccccc', 'axes.grid': False,
         'mathtext.fontset': 'stix',
     })
 
@@ -427,7 +403,6 @@ def plot_fitting(V, J, fit, ax):
     popt = fit['popt']
     model_type = fit['model_type']
 
-    # Compute all components
     if model_type == 'dual':
         J01, A1, J02, A2, R_S, R_SH, k_val, m_val = popt
     else:
@@ -438,16 +413,11 @@ def plot_fitting(V, J, fit, ax):
     Jd_plot, Vint_plot, _ = solve_implicit(V_plot, J01, A1, J02, A2, R_S, R_SH, k_val, m_val)
     Jdiff, Jrec, Joh, Jtun = _compute_components(Vint_plot, J01, A1, J02, A2, R_SH, k_val, m_val)
 
-    # Data points
     ax.semilogy(V, np.abs(J), 'o', ms=3, color=COLOR_PALETTE['data'],
                 alpha=0.7, label='Data', zorder=5,
                 mec=COLOR_PALETTE['data'], mew=0.3)
-
-    # Total fit
     ax.semilogy(V_plot, np.abs(Jd_plot), '-', lw=1.5, alpha=0.7,
                 color=COLOR_PALETTE['total_fit'], label='$J_{\\mathrm{dark}}$ fit', zorder=4)
-
-    # Components
     ax.semilogy(V_plot, np.abs(Jdiff), '--', lw=1.0,
                 color=COLOR_PALETTE['j_diff'], label='$J_{\\mathrm{diff}}$', zorder=3)
     if model_type == 'dual':
@@ -458,16 +428,12 @@ def plot_fitting(V, J, fit, ax):
     ax.semilogy(V_plot, np.abs(Jtun), ':', lw=1.0,
                 color=COLOR_PALETTE['j_tun'], label='$J_{\\mathrm{tun}}$', zorder=3)
 
-    # Labels
     ax.set_xlabel('Voltage (V)', fontweight='bold')
     ax.set_ylabel('Current Density (A/cm$^{2}$)', fontweight='bold')
     ax.tick_params(top=False, right=False, which='both', labelsize=8)
 
-    # Y-axis range: data ± 0.75 decades
     Jpos = np.abs(J)[np.abs(J) > 0]
     ax.set_ylim(np.min(Jpos) * 10 ** (-0.75), np.max(Jpos) * 10 ** (0.75))
-
-    # Legend
     ax.legend(fontsize=6, loc='lower left', frameon=False,
               handlelength=1.5, prop={'weight': 'normal'})
 
@@ -584,7 +550,6 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
 
     popt = fit['popt']
     model_type = fit['model_type']
-    Vt = fit['Vt']
 
     if model_type == 'dual':
         J01, A1, J02, A2, R_S, R_SH, k_val, m_val = popt
@@ -600,11 +565,9 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
     Jdiff, Jrec, Joh, Jtun = _compute_components(Vint_d, J01, A1, J02, A2, R_SH, k_val, m_val)
     Jtot = np.abs(Jd_d)
 
-    # Zero-bias dark current
     i0 = np.argmin(np.abs(Vd))
     Jzero = Jtot[i0]
 
-    # Dominance regions
     r_main = np.abs(Jdiff) / (Jtot + 1e-30)
     mdz = (r_main > 0.7) & (Vd <= 0)
     V_main_end = Vd[mdz].min() if np.any(mdz) else -0.2
@@ -618,7 +581,6 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
     rt_tun = np.abs(Jtun[i_neg05]) / (Jtot[i_neg05] + 1e-30) * 100
     rt_ohm = np.abs(Joh[i_neg05]) / (Jtot[i_neg05] + 1e-30) * 100
 
-    # ── Build document ──
     doc = Document()
     style = doc.styles['Normal']
     style.font.name = 'Times New Roman'
@@ -626,12 +588,10 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
     style.paragraph_format.space_after = Pt(6)
     style.paragraph_format.line_spacing = 1.15
 
-    # Title
     title = doc.add_heading(
         f'Dark Current J-V Fitting Analysis ({model_label} Model)', 0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Abstract paragraph
     doc.add_paragraph(
         f'Figure 1 shows the dark current density–voltage (J–V) characteristics '
         f'fitted with the {model_label.lower()} implicit diode model. '
@@ -643,7 +603,6 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
         f'Dark current density at zero bias: {Jzero:.1e} A/cm².'
     )
 
-    # Embedded figure
     img_path = os.path.join(output_dir, f'{label}_fitting.png')
     if os.path.exists(img_path):
         p = doc.add_paragraph()
@@ -657,7 +616,6 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
         r.italic = True
         doc.add_paragraph('')
 
-    # Model equation
     doc.add_heading('Fitting Model', 1)
     eq = doc.add_paragraph()
     eq.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -677,14 +635,12 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
     eq_desc.add_run(desc_text).font.size = Pt(9)
     doc.add_paragraph('')
 
-    # Component explanations
     doc.add_heading('1. Diffusion Current (J_diff)', 2)
     doc.add_paragraph(
         f'J_diff = J₀₁·[exp(A₁·V_int)−1], with A₁ = q/(n₁·k_B·T). '
         f'J₀₁ = {J01:.2e} A/cm², A₁ = {A1:.2f} V⁻¹, '
         f'equivalent ideality factor n₁ = {fit["n1"]:.3f}. '
-        f'Dominates at low forward/reverse bias, representing minority carrier '
-        f'diffusion across the junction.'
+        f'Dominates at low forward/reverse bias.'
     )
 
     if model_type == 'dual':
@@ -692,59 +648,35 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
         doc.add_paragraph(
             f'J_rec = J₀₂·[exp(A₂·V_int)−1], with A₂ = q/(n₂·k_B·T). '
             f'J₀₂ = {J02:.2e} A/cm², A₂ = {A2:.2f} V⁻¹, '
-            f'equivalent ideality factor n₂ = {fit["n2"]:.3f}. '
-            f'Arises from defect-mediated G-R processes in the depletion region. '
-            f'Dominant in devices with high trap density.'
+            f'equivalent ideality factor n₂ = {fit["n2"]:.3f}.'
         )
 
     idx = 3 if model_type == 'dual' else 2
     doc.add_heading(f'{idx}. Ohmic Leakage (J_Ohm)', 2)
     doc.add_paragraph(
-        f'J_Ohm = V_int / R_SH. R_SH = {R_SH:.2e} Ω·cm². '
-        f'Represents leakage through shunt paths (pinholes, interfacial defects). '
-        f'Negligible in well-fabricated devices.'
+        f'J_Ohm = V_int / R_SH. R_SH = {R_SH:.2e} Ω·cm².'
     )
 
     idx += 1
     doc.add_heading(f'{idx}. Power-Law Tunneling (J_tun)', 2)
     doc.add_paragraph(
         f'J_tun = k · V_int^m. k = {k_val:.4e}, m = {m_val:.3f}. '
-        f'Describes field-assisted tunneling through quantum dot trap states '
-        f'and heterojunction interface states. m typically in the range 2–6. '
-        f'Dominates at high reverse bias.'
+        f'Field-assisted tunneling through QD trap states. m typically 2–6.'
     )
 
     doc.add_heading(f'{idx+1}. Series Resistance (R_S)', 2)
     doc.add_paragraph(
-        f'R_S = {R_S:.2f} Ω·cm². '
-        f'Accounts for voltage drop across electrode contacts, transport layers, '
-        f'and bulk QD film resistance. V_int = V − J_D·R_S ensures the diode '
-        f'junction receives the correct internal bias.'
+        f'R_S = {R_S:.2f} Ω·cm². V_int = V − J_D·R_S.'
     )
 
-    # Voltage-dependent dominance
     doc.add_heading('Voltage-Dependent Dominance', 1)
-
     doc.add_heading(f'1. Low Reverse Bias (0 V to {abs(V_main_end):.1f} V): J_diff Dominant', 2)
-    doc.add_paragraph(
-        f'In this region, J_diff accounts for >70% of total dark current. '
-        f'Diffusion of thermally generated minority carriers is the primary mechanism.'
-    )
-
+    doc.add_paragraph('J_diff accounts for >70% of total dark current.')
     doc.add_heading(f'2. High Reverse Bias (< {V_crossover:.1f} V): J_tun Emerges', 2)
-    doc.add_paragraph(
-        f'J_tun grows rapidly with reverse bias, overtaking J_diff. '
-        f'At −0.5 V, J_tun contributes ~{rt_tun:.0f}% of the total.'
-    )
-
+    doc.add_paragraph(f'At −0.5 V, J_tun contributes ~{rt_tun:.0f}% of the total.')
     doc.add_heading('3. Full Range: J_Ohm Negligible', 2)
-    doc.add_paragraph(
-        f'J_Ohm remains extremely low across the full voltage range. '
-        f'At −0.5 V, J_Ohm ~{rt_ohm:.1f}% of total, confirming excellent '
-        f'film quality and low interfacial leakage.'
-    )
+    doc.add_paragraph(f'At −0.5 V, J_Ohm ~{rt_ohm:.1f}% of total.')
 
-    # Parameter table
     doc.add_heading('Fitting Parameters', 1)
     tdata = [
         ('J₀₁ (Diffusion)', f'{J01:.4e}', 'A/cm²'),
@@ -773,25 +705,20 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
         tbl.rows[i + 1].cells[1].text = val
         tbl.rows[i + 1].cells[2].text = unit
 
-    # Implications
     doc.add_heading('Implications', 1)
     doc.add_paragraph(
         f'The {model_label.lower()} implicit diode model achieves '
         f'R² = {fit["r_squared"]:.4f} with physically meaningful parameters. '
         f'The ideality factor n₁ = {fit["n1"]:.3f} '
         + (f'and n₂ = {fit["n2"]:.3f} ' if model_type == 'dual' else '')
-        + f'indicate '
         + ('diffusion-dominated transport with moderate G-R recombination.'
            if model_type == 'dual' and fit["n2"] and fit["n2"] > 1.5
            else 'near-ideal diffusion transport.')
-        + f' Future device optimization should focus on: '
-        f'(1) reducing trap density to suppress J_tun (k = {k_val:.2e}); '
-        f'(2) minimizing R_S ({R_S:.1f} Ω·cm²) through contact engineering; '
-        f'(3) passivating G-R centers to reduce '
-        + ('J₀₂.' if model_type == 'dual' else 'recombination.')
+        + f' Future optimization: (1) reduce trap density to suppress J_tun (k = {k_val:.2e}); '
+        f'(2) minimize R_S ({R_S:.1f} Ω·cm²); '
+        f'(3) passivate G-R centers.'
     )
 
-    # Save
     fp = os.path.join(output_dir, f'{label}_report.docx')
     doc.save(fp)
     print(f"  Report → {fp}")
@@ -806,26 +733,7 @@ def run_dark_current_fitting(data_file, output_dir=None, model='dual',
                              T=300, area=None, vmin=None, vmax=None,
                              auto_dark=True, max_points=None, hd=False,
                              fig_width_cm=8.5):
-    """
-    Run complete dark current fitting pipeline.
-
-    Parameters
-    ----------
-    data_file : str — path to input data file (.txt)
-    output_dir : str — output directory (default: ./output)
-    model : 'single' | 'dual' | 'both'
-    T : float — temperature (K)
-    area : float — device area (cm²)
-    vmin, vmax : float — voltage range for fitting
-    auto_dark : bool — auto-detect dark sweeps
-    max_points : int — use first N data points
-    hd : bool — export 600 dpi PNG
-    fig_width_cm : float — figure width in cm
-
-    Returns
-    -------
-    dict with keys: results (list of per-model dicts), output_dir
-    """
+    """Run complete dark current fitting pipeline."""
     if output_dir is None:
         output_dir = os.path.join(
             os.path.dirname(os.path.abspath(data_file)), 'output')
@@ -838,11 +746,9 @@ def run_dark_current_fitting(data_file, output_dir=None, model='dual',
           + (f", Area = {area} cm²" if area else "")
           + f", Model = {model}")
 
-    # Load data
     V, J = load_data(data_file, area=area, auto_dark=auto_dark,
                      max_points=max_points)
 
-    # Apply voltage range
     if vmin is not None or vmax is not None:
         lo = vmin if vmin is not None else V.min()
         hi = vmax if vmax is not None else V.max()
@@ -851,11 +757,8 @@ def run_dark_current_fitting(data_file, output_dir=None, model='dual',
         J = J[mask]
         print(f"  Voltage range: [{lo}, {hi}] V, {len(V)} pts")
 
-    # Determine which models to run
     models_to_run = ['single', 'dual'] if model == 'both' else [model]
     all_results = []
-
-    # Get base name for output files
     base_name = os.path.splitext(os.path.basename(data_file))[0]
 
     for m in models_to_run:
@@ -863,17 +766,14 @@ def run_dark_current_fitting(data_file, output_dir=None, model='dual',
         print(f"  Running: {m.upper()}-DIODE MODEL")
         print(f"{'─'*50}")
 
-        # Create model-specific output directory
         model_dir = os.path.join(output_dir, f'model_{m}')
         os.makedirs(model_dir, exist_ok=True)
 
-        # Fit
         fit = fit_dark_current(V, J, model_type=m, T=T)
         if fit is None:
             print(f"  {m}-diode fitting failed — skipping")
             continue
 
-        # Plot
         configure_plot_style(width_cm=fig_width_cm)
         fig, ax = plt.subplots(
             figsize=(fig_width_cm / CM_PER_INCH,
@@ -885,11 +785,8 @@ def run_dark_current_fitting(data_file, output_dir=None, model='dual',
         plt.close(fig)
         print(f"  Figure → {fig_path}.*")
 
-        # Export data
         export_component_data(V, J, fit, model_dir, label=base_name)
         export_params(fit, model_dir, label=base_name)
-
-        # Word report
         generate_word_report(fit, V, J, model_dir, T=T, area=area,
                             label=base_name)
 
@@ -936,16 +833,11 @@ if __name__ == '__main__':
     args = p.parse_args()
 
     result = run_dark_current_fitting(
-        args.data,
-        output_dir=args.output,
-        model=args.model,
-        T=args.temperature,
-        area=args.area,
-        vmin=args.vmin,
-        vmax=args.vmax,
+        args.data, output_dir=args.output, model=args.model,
+        T=args.temperature, area=args.area,
+        vmin=args.vmin, vmax=args.vmax,
         auto_dark=not args.no_auto_dark,
-        max_points=args.points,
-        hd=args.hd,
+        max_points=args.points, hd=args.hd,
         fig_width_cm=args.fig_width_cm,
     )
 
