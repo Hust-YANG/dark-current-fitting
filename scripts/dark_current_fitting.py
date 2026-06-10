@@ -49,35 +49,34 @@ COLOR_PALETTE = dict(
 # ── Parameter Bounds ─────────────────────────────────────────────────────────
 # [J01, A1, J02, A2, R_S, R_SH, k, m]
 BOUNDS_DUAL = (
-    [1e-12, 10.0, 1e-12,  5.0,  0.0,  1e3, 1e-15, 0.5],
-    [1e-3,  50.0, 1e-3,   30.0, 1e4,  1e8, 1e2,   4.5]
+    [1e-12, 10.0, 1e-12,  5.0,  0.0,  1e3, 1e-10, 1.0],
+    [1e-3,  50.0, 1e-3,   30.0, 1e4,  1e8, 1e2,   6.0]
 )
 # [J01, A1, R_S, R_SH, k, m]
-# A1 ∈ [30,45] → n1 ∈ [0.86,1.29] (diffusion-only for single-diode)
 BOUNDS_SINGLE = (
-    [1e-12, 30.0, 0.0,  1e3, 1e-15, 0.5],
-    [1e-3,  45.0, 1e4,  1e8, 1e2,   4.5]
+    [1e-12, 10.0, 0.0,  1e3, 1e-10, 1.0],
+    [1e-3,  50.0, 1e4,  1e8, 1e2,   6.0]
 )
 
 # ── Initial Guesses ──────────────────────────────────────────────────────────
 GUESSES_DUAL = [
     # J01       A1     J02       A2     R_S   R_SH    k        m
-    [1e-7,     38.7,  1e-6,    19.3,   1.0,  1e5,   1e-8,   3.0],
-    [1e-8,     40.0,  1e-7,    20.0,  10.0,  1e6,   1e-6,   2.0],
-    [1e-6,     35.0,  1e-5,    17.0,   0.1,  1e4,   1e-9,   4.0],
-    [1e-7,     42.0,  1e-8,    22.0,   5.0,  1e5,   1e-7,   1.5],
-    [1e-9,     38.7,  1e-6,    19.3,  50.0,  1e7,   1e-5,   1.0],
-    [1e-5,     30.0,  1e-4,    15.0,   0.5,  1e3,   1e-10,  3.5],
+    [1e-7,     38.7,  1e-6,    19.3,   1.0,  1e5,   1e-6,   3.0],
+    [1e-8,     40.0,  1e-7,    20.0,  10.0,  1e6,   1e-7,   2.5],
+    [1e-6,     35.0,  1e-5,    17.0,   0.1,  1e4,   1e-5,   3.5],
+    [1e-7,     42.0,  1e-8,    22.0,   5.0,  1e5,   1e-8,   4.0],
+    [1e-9,     38.7,  1e-6,    19.3,  50.0,  1e7,   1e-4,   2.0],
+    [1e-5,     30.0,  1e-4,    15.0,   0.5,  1e3,   1e-9,   5.0],
 ]
 
 GUESSES_SINGLE = [
     # J01       A1     R_S   R_SH    k        m
-    [1e-7,     38.7,   1.0,  1e5,   1e-6,   2.0],
-    [1e-8,     35.0,  10.0,  1e6,   1e-7,   1.0],
-    [1e-6,     42.0,   0.1,  1e4,   1e-5,   3.0],
-    [1e-7,     32.0,   5.0,  1e5,   1e-8,   1.5],
-    [1e-9,     40.0,  50.0,  1e7,   1e-4,   0.8],
-    [1e-5,     44.0,   0.5,  1e3,   1e-10,  3.5],
+    [1e-7,     38.7,   1.0,  1e5,   1e-6,   3.0],
+    [1e-8,     40.0,  10.0,  1e6,   1e-7,   2.5],
+    [1e-6,     35.0,   0.1,  1e4,   1e-5,   3.5],
+    [1e-7,     42.0,   5.0,  1e5,   1e-8,   4.0],
+    [1e-9,     38.7,  50.0,  1e7,   1e-4,   2.0],
+    [1e-5,     30.0,   0.5,  1e3,   1e-9,   5.0],
 ]
 
 
@@ -93,13 +92,9 @@ def _safe_power(V, m):
 
 def _compute_components(V_int, J01, A1, J02, A2, R_SH, k, m):
     """Compute the four current components from V_int."""
-    # Diffusion current
     J_diff = J01 * (np.exp(np.clip(A1 * V_int, -MAX_EXP_ARG, MAX_EXP_ARG)) - 1.0)
-    # Recombination current
     J_rec = J02 * (np.exp(np.clip(A2 * V_int, -MAX_EXP_ARG, MAX_EXP_ARG)) - 1.0)
-    # Ohmic leakage
     J_Ohm = V_int / R_SH
-    # Power-law tunneling
     J_tun = k * _safe_power(V_int, m)
     return J_diff, J_rec, J_Ohm, J_tun
 
@@ -244,30 +239,23 @@ def _identify_dark(sweeps, fp):
 def load_data(fp, area=None, auto_dark=True, manual_sweep=None, max_points=None):
     """Load and preprocess data. Returns V_fit, J_fit."""
     sweeps, has_marker = _parse_raw_data(fp)
-
     if manual_sweep:
         use = [manual_sweep] if manual_sweep in sweeps else _identify_dark(sweeps, fp)
     elif auto_dark and len(sweeps) > 1:
         use = _identify_dark(sweeps, fp)
     else:
         use = list(sweeps.keys())
-
     all_v, all_i = [], []
     for sid in sorted(use):
         all_v.extend(sweeps[sid]['V'])
         all_i.extend(sweeps[sid]['I'])
-
     if max_points:
         all_v = all_v[:max_points]
         all_i = all_i[:max_points]
-
     Va = np.array(all_v)
     Ia = np.array(all_i)
-
-    # Voltage convention: V_fit = -V_raw, J_fit = -J_raw
     V_fit = -Va
     J_fit = -Ia / (area if area else 1.0)
-
     print(f"  Loaded {len(V_fit)} pts" + (f", area={area} cm²" if area else ""))
     return V_fit, J_fit
 
@@ -282,11 +270,17 @@ def thermal_voltage(T):
 
 def fit_dark_current(V, J, model_type='dual', T=300):
     """
-    Global fitting with multiple initial guesses and physical parameter selection.
-    
-    Uses a scoring function that penalizes fits where the tunneling coefficient k
-    is at the lower bound (k < 1e-10), preventing the optimizer from suppressing
-    physically meaningful tunneling components in favor of marginally higher R².
+    Global fitting with multiple initial guesses.
+
+    Parameters
+    ----------
+    V, J : ndarray — voltage (V_fit) and current density
+    model_type : 'single' | 'dual'
+    T : float — temperature (K)
+
+    Returns
+    -------
+    dict with keys: popt, r_squared, Vt, n1, n2, model_type, converged
     """
     Vt = thermal_voltage(T)
 
@@ -304,7 +298,7 @@ def fit_dark_current(V, J, model_type='dual', T=300):
     label = "Single-Diode" if model_type == 'single' else "Dual-Diode"
     print(f"\n=== {label} Global Fitting ===")
 
-    best, best_score = None, -np.inf
+    best, best_r2 = None, -np.inf
     for i, p0 in enumerate(guesses):
         try:
             popt, _ = curve_fit(model_func, V, J, p0=p0, bounds=bounds,
@@ -314,26 +308,16 @@ def fit_dark_current(V, J, model_type='dual', T=300):
             sst = np.sum((J - np.mean(J)) ** 2)
             r2 = 1.0 - ssr / sst if sst > 0 else 0.0
 
-            # Compute ideality factors
             n1 = 1.0 / (popt[1] * Vt) if popt[1] > 0 else float('inf')
             n2_str = ""
             if model_type == 'dual':
                 n2 = 1.0 / (popt[3] * Vt) if popt[3] > 0 else float('inf')
                 n2_str = f" n2={n2:.3f}"
 
-            # Physical penalty: penalize fits where tunneling term is effectively zero
-            k_idx = 6 if model_type == 'dual' else 4
-            score = r2
-            if popt[k_idx] < 1e-10:  # k at lower bound → tunneling suppressed
-                score -= 0.0005  # small penalty to prefer physically meaningful fits
-
-            # Format output
             pstr = " ".join(f"{popt[j]:.4e}" for j in range(len(popt)))
-            flag = " [k≈0]" if popt[k_idx] < 1e-10 else ""
-            print(f"  G{i+1}: {pstr} R²={r2:.6f} n1={n1:.3f}{n2_str}{flag}")
+            print(f"  G{i+1}: {pstr} R²={r2:.6f} n1={n1:.3f}{n2_str}")
 
-            if score > best_score:
-                best_score = score
+            if r2 > best_r2:
                 best_r2 = r2
                 best = popt
         except RuntimeError:
@@ -343,7 +327,6 @@ def fit_dark_current(V, J, model_type='dual', T=300):
         print("  All initial guesses failed to converge.")
         return None
 
-    # Compute final fit
     if model_type == 'dual':
         Jd, V_int, conv = solve_implicit(V, *best, verbose=True)
     else:
@@ -559,7 +542,6 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
         J02, A2 = 0.0, 19.3
         model_label = "Single-Diode"
 
-    # Compute components on a dense grid for analysis
     Vd = np.linspace(V.min(), V.max(), 5000)
     Jd_d, Vint_d, _ = solve_implicit(Vd, J01, A1, J02, A2, R_S, R_SH, k_val, m_val)
     Jdiff, Jrec, Joh, Jtun = _compute_components(Vint_d, J01, A1, J02, A2, R_SH, k_val, m_val)
@@ -715,8 +697,7 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
            if model_type == 'dual' and fit["n2"] and fit["n2"] > 1.5
            else 'near-ideal diffusion transport.')
         + f' Future optimization: (1) reduce trap density to suppress J_tun (k = {k_val:.2e}); '
-        f'(2) minimize R_S ({R_S:.1f} Ω·cm²); '
-        f'(3) passivate G-R centers.'
+        f'(2) minimize R_S ({R_S:.1f} Ω·cm²); (3) passivate G-R centers.'
     )
 
     fp = os.path.join(output_dir, f'{label}_report.docx')
