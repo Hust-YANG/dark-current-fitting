@@ -9,11 +9,16 @@ Model (Dual-Diode, 8 params):
 
 Model (Single-Diode, 6 params): J02 ≡ 0, same structure.
 
-Components:
+Components (Dual-Diode):
   J_diff  = J01·[exp(A1·V_int)-1]     (扩散电流, A1 ≈ q/(n1·k·T), n1≈1)
   J_rec   = J02·[exp(A2·V_int)-1]     (复合电流, A2 ≈ q/(n2·k·T), n2≈2)
   J_Ohm   = V_int / R_SH               (欧姆漏电)
   J_TAT   = k · V · exp(m/V_int)       (陷阱辅助隧穿电流, m < 0, |m|~0.01-0.5V)
+
+Components (Single-Diode):
+  J_main  = J01·[exp(A1·V_int)-1]     (扩散+复合电流, A1 ≈ q/(n1·k·T))
+  J_Ohm   = V_int / R_SH               (欧姆漏电)
+  J_TAT   = k · V · exp(m/V_int)       (陷阱辅助隧穿电流)
 
 Output: 拟合图(SVG/PDF/PNG) + 分量数据(.txt) + 参数(CSV) + 学术报告(.docx)
 """
@@ -34,19 +39,16 @@ if hasattr(sys.stdout, 'reconfigure'):
     try: sys.stdout.reconfigure(encoding='utf-8')
     except Exception: pass
 
-# ── Constants ────────────────────────────────────────────────────────────────
 T_DEFAULT = 300
 CM_PER_INCH = 2.54
 MAX_EXP_ARG = 100.0
 
-# Wong 2011 color-blind friendly palette
 COLOR_PALETTE = dict(
     data='#0072B2', total_fit='#D55E00',
-    j_diff='#009E73', j_rec='#F0E442',
+    j_main='#009E73', j_rec='#F0E442',
     j_ohm='#CC79A7', j_tat='#56B4E9'
 )
 
-# ── Parameter Bounds ─────────────────────────────────────────────────────────
 # [J01, A1, J02, A2, R_S, R_SH, k, m]   m < 0 for TAT: exp(m/V_int)
 BOUNDS_DUAL = (
     [1e-12, 10.0, 1e-12,  5.0,  0.0,  1e3, 1e-10, -1.0],
@@ -77,13 +79,12 @@ GUESSES_SINGLE = [
 
 
 def _compute_components(V, V_int, J01, A1, J02, A2, R_SH, k, m):
-    """Compute the four current components."""
-    J_diff = J01 * (np.exp(np.clip(A1 * V_int, -MAX_EXP_ARG, MAX_EXP_ARG)) - 1.0)
+    J_main = J01 * (np.exp(np.clip(A1 * V_int, -MAX_EXP_ARG, MAX_EXP_ARG)) - 1.0)
     J_rec = J02 * (np.exp(np.clip(A2 * V_int, -MAX_EXP_ARG, MAX_EXP_ARG)) - 1.0)
     J_Ohm = V_int / R_SH
     V_int_TAT = np.where(np.abs(V_int) < 0.005, np.sign(V_int + 1e-30) * 0.005, V_int)
     J_TAT = k * V * np.exp(np.clip(m / V_int_TAT, -30.0, 30.0))
-    return J_diff, J_rec, J_Ohm, J_TAT
+    return J_main, J_rec, J_Ohm, J_TAT
 
 
 def _rhs_total(V, V_int, J01, A1, J02, A2, R_SH, k, m):
@@ -93,7 +94,6 @@ def _rhs_total(V, V_int, J01, A1, J02, A2, R_SH, k, m):
 
 def solve_implicit(V, J01, A1, J02, A2, R_S, R_SH, k, m,
                    max_iter=200, tol=1e-10, verbose=False):
-    """Solve J_D = RHS(V, V - J_D·R_S) via damped fixed-point iteration."""
     Jd = np.zeros_like(V)
     damping = 0.4
     for i in range(max_iter):
@@ -257,13 +257,14 @@ def plot_fitting(V, J, fit, ax):
     else: J01, A1, R_S, R_SH, k_val, m_val = popt; J02, A2 = 0.0, 19.3
     V_plot = np.linspace(V.min(), V.max(), 1000)
     Jd_plot, Vint_plot, _ = solve_implicit(V_plot, J01, A1, J02, A2, R_S, R_SH, k_val, m_val)
-    Jdiff, Jrec, Joh, JTAT = _compute_components(V_plot, Vint_plot, J01, A1, J02, A2, R_SH, k_val, m_val)
+    Jmain, Jrec, Joh, JTAT = _compute_components(V_plot, Vint_plot, J01, A1, J02, A2, R_SH, k_val, m_val)
     ax.semilogy(V, np.abs(J), 'o', ms=3, color=COLOR_PALETTE['data'], alpha=0.7,
                 label='Data', zorder=5, mec=COLOR_PALETTE['data'], mew=0.3)
     ax.semilogy(V_plot, np.abs(Jd_plot), '-', lw=1.5, alpha=0.7,
                 color=COLOR_PALETTE['total_fit'], label='$J_{\\mathrm{dark}}$ fit', zorder=4)
-    ax.semilogy(V_plot, np.abs(Jdiff), '--', lw=1.0, color=COLOR_PALETTE['j_diff'],
-                label='$J_{\\mathrm{diff}}$', zorder=3)
+    main_label = '$J_{\\mathrm{diff}}$' if model_type == 'dual' else '$J_{\\mathrm{main}}$'
+    ax.semilogy(V_plot, np.abs(Jmain), '--', lw=1.0, color=COLOR_PALETTE['j_main'],
+                label=main_label, zorder=3)
     if model_type == 'dual':
         ax.semilogy(V_plot, np.abs(Jrec), '-.', lw=1.0, color=COLOR_PALETTE['j_rec'],
                     label='$J_{\\mathrm{rec}}$', zorder=3)
@@ -298,13 +299,13 @@ def export_component_data(V, J, fit, output_dir, label='sample'):
     if model_type == 'dual': J01, A1, J02, A2, R_S, R_SH, k_val, m_val = popt
     else: J01, A1, R_S, R_SH, k_val, m_val = popt; J02, A2 = 0.0, 19.3
     Jd, Vint, _ = solve_implicit(V, J01, A1, J02, A2, R_S, R_SH, k_val, m_val)
-    Jdiff, Jrec, Joh, JTAT = _compute_components(V, Vint, J01, A1, J02, A2, R_SH, k_val, m_val)
+    Jmain, Jrec, Joh, JTAT = _compute_components(V, Vint, J01, A1, J02, A2, R_SH, k_val, m_val)
     if model_type == 'dual':
         header = 'V(V)\tJ_data(A/cm2)\tJ_fit(A/cm2)\tJ_diff(A/cm2)\tJ_rec(A/cm2)\tJ_Ohm(A/cm2)\tJ_TAT(A/cm2)'
-        data = np.column_stack([V, J, Jd, Jdiff, Jrec, Joh, JTAT])
+        data = np.column_stack([V, J, Jd, Jmain, Jrec, Joh, JTAT])
     else:
-        header = 'V(V)\tJ_data(A/cm2)\tJ_fit(A/cm2)\tJ_diff(A/cm2)\tJ_Ohm(A/cm2)\tJ_TAT(A/cm2)'
-        data = np.column_stack([V, J, Jd, Jdiff, Joh, JTAT])
+        header = 'V(V)\tJ_data(A/cm2)\tJ_fit(A/cm2)\tJ_main(A/cm2)\tJ_Ohm(A/cm2)\tJ_TAT(A/cm2)'
+        data = np.column_stack([V, J, Jd, Jmain, Joh, JTAT])
     fp = os.path.join(output_dir, f'{label}_component_fit.txt')
     np.savetxt(fp, data, header=header, delimiter='\t', fmt='%.6e', comments='')
     print(f"  Component data → {fp}")
@@ -362,13 +363,13 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
         J01, A1, R_S, R_SH, k_val, m_val = popt; J02, A2 = 0.0, 19.3; model_label = "Single-Diode"
     Vd = np.linspace(V.min(), V.max(), 5000)
     Jd_d, Vint_d, _ = solve_implicit(Vd, J01, A1, J02, A2, R_S, R_SH, k_val, m_val)
-    Jdiff, Jrec, Joh, JTAT = _compute_components(Vd, Vint_d, J01, A1, J02, A2, R_SH, k_val, m_val)
+    Jmain, Jrec, Joh, JTAT = _compute_components(Vd, Vint_d, J01, A1, J02, A2, R_SH, k_val, m_val)
     Jtot = np.abs(Jd_d)
     i0 = np.argmin(np.abs(Vd)); Jzero = Jtot[i0]
-    r_main = np.abs(Jdiff) / (Jtot + 1e-30)
+    r_main = np.abs(Jmain) / (Jtot + 1e-30)
     mdz = (r_main > 0.7) & (Vd <= 0); V_main_end = Vd[mdz].min() if np.any(mdz) else -0.2
     mr = Vd < 0; Vr = Vd[mr]
-    ci = np.where(np.abs(JTAT[mr]) > np.abs(Jdiff[mr]))[0]
+    ci = np.where(np.abs(JTAT[mr]) > np.abs(Jmain[mr]))[0]
     V_crossover = Vr[ci[0]] if len(ci) > 0 else -0.3
     i_neg05 = np.argmin(np.abs(Vd + 0.5))
     rt_TAT = np.abs(JTAT[i_neg05]) / (Jtot[i_neg05] + 1e-30) * 100
@@ -382,7 +383,7 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
         f'Figure 1 shows the dark current J-V characteristics fitted with the '
         f'{model_label.lower()} implicit diode model. Blue circles: experimental data; '
         f'orange solid: total fit (R²={fit["r_squared"]:.4f}); '
-        f'green dashed: J_diff; '
+        + ('green dashed: J_diff; ' if model_type == 'dual' else 'green dashed: J_main; ')
         + ('gold dash-dotted: J_rec; ' if model_type == 'dual' else '')
         + f'purple dash-dotted: J_Ohm; light blue dotted: J_TAT (trap-assisted tunneling). '
         f'Excellent agreement across {V.min():.1f}V to {V.max():.1f}V. '
@@ -400,11 +401,17 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
                    '+ V_int/R_SH + k·V·exp(m/V_int)\nV_int = V − J_D·R_S')
     r.font.size = Pt(12); r.bold = True; doc.add_paragraph('')
     eq_desc = doc.add_paragraph(); eq_desc.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    desc_text = ('J_diff + J_rec + J_Ohm + J_TAT (trap-assisted tunneling)'
-                 if model_type == 'dual' else 'J_diff + J_Ohm + J_TAT (trap-assisted tunneling)')
+    desc_text = ('J_diff (diffusion) + J_rec (G-R recombination) + J_Ohm + J_TAT (TAT)'
+                 if model_type == 'dual' else
+                 'J_main (diffusion+recombination) + J_Ohm + J_TAT (TAT)')
     eq_desc.add_run(desc_text).font.size = Pt(9); doc.add_paragraph('')
-    doc.add_heading('1. Diffusion Current (J_diff)', 2)
-    doc.add_paragraph(f'J_diff = J₀₁·[exp(A₁·V_int)−1]. J₀₁={J01:.2e} A/cm², n₁={fit["n1"]:.3f}.')
+    if model_type == 'dual':
+        doc.add_heading('1. Diffusion Current (J_diff)', 2)
+        doc.add_paragraph(f'J_diff = J₀₁·[exp(A₁·V_int)−1]. J₀₁={J01:.2e} A/cm², n₁={fit["n1"]:.3f}.')
+    else:
+        doc.add_heading('1. Main Diode Current (J_main)', 2)
+        doc.add_paragraph(f'J_main = J₀₁·[exp(A₁·V_int)−1] (diffusion+recombination). '
+                          f'J₀₁={J01:.2e} A/cm², n₁={fit["n1"]:.3f}.')
     if model_type == 'dual':
         doc.add_heading('2. G-R Recombination Current (J_rec)', 2)
         doc.add_paragraph(f'J_rec = J₀₂·[exp(A₂·V_int)−1]. J₀₂={J02:.2e} A/cm², n₂={fit["n2"]:.3f}.')
@@ -417,10 +424,11 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
     doc.add_heading(f'{idx+1}. Series Resistance (R_S)', 2)
     doc.add_paragraph(f'R_S={R_S:.2f} Ω·cm². V_int = V − J_D·R_S.')
     doc.add_heading('Voltage-Dependent Dominance', 1)
-    doc.add_heading(f'1. Low Reverse Bias (0V to {abs(V_main_end):.1f}V): J_diff Dominant', 2)
-    doc.add_paragraph('J_diff > 70% of total.')
+    primary_label = 'J_diff' if model_type == 'dual' else 'J_main'
+    doc.add_heading(f'1. Low Reverse Bias (0V to {abs(V_main_end):.1f}V): {primary_label} Dominant', 2)
+    doc.add_paragraph(f'{primary_label} > 70% of total.')
     doc.add_heading(f'2. High Reverse Bias (< {V_crossover:.1f}V): J_TAT Emerges', 2)
-    doc.add_paragraph(f'At −0.5V, J_TAT ~{rt_TAT:.0f}% of total.')
+    doc.add_paragraph(f'J_TAT overtakes {primary_label}. At −0.5V, J_TAT ~{rt_TAT:.0f}% of total.')
     doc.add_heading('3. Full Range: J_Ohm Negligible', 2)
     doc.add_paragraph(f'At −0.5V, J_Ohm ~{rt_ohm:.1f}% of total.')
     doc.add_heading('Fitting Parameters', 1)
@@ -443,7 +451,7 @@ def generate_word_report(fit, V, J, output_dir, T=300, area=None, label='sample'
         tbl.rows[i+1].cells[0].text = name; tbl.rows[i+1].cells[1].text = val; tbl.rows[i+1].cells[2].text = unit
     doc.add_heading('Implications', 1)
     doc.add_paragraph(
-        f'The {model_label.lower()} model achieves R²={fit["r_squared"]:.4f}. '
+        f'{model_label} model achieves R²={fit["r_squared"]:.4f}. '
         f'n₁={fit["n1"]:.3f} ' + (f'n₂={fit["n2"]:.3f}. ' if model_type == 'dual' else '')
         + ('Diffusion-dominated with moderate G-R recombination.'
            if model_type == 'dual' and fit["n2"] and fit["n2"] > 1.5 else 'Near-ideal diffusion transport.')

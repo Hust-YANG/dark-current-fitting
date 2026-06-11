@@ -2,40 +2,33 @@
 name: dark-current-fitting
 description: >
   PbS CQD photodetector dark current analysis using implicit single/double-diode
-  models with series resistance. Supports dual-diode (J_diff + J_rec + J_Ohm + J_TAT)
-  and single-diode (J_diff + J_Ohm + J_TAT) decomposition. Global fitting via
-  curve_fit with multiple initial guesses. Generates journal-ready plots
-  (SVG/PDF/PNG), component data (.txt), parameters (CSV), and academic Word report (.docx).
-  Auto-detects dark sweeps from mixed dark/light data.
+  models with series resistance. Dual-diode: J_diff + J_rec + J_Ohm + J_TAT.
+  Single-diode: J_main + J_Ohm + J_TAT. Global fitting via curve_fit with multiple
+  initial guesses. Generates journal-ready plots (SVG/PDF/PNG), component data (.txt),
+  parameters (CSV), and academic Word report (.docx). Auto-detects dark sweeps.
   Trigger on: 暗电流拟合, dark current fitting, Jdark-V, diode model,
   量子点, PbS CQD, photodetector, 光电探测器.
 ---
 
 # /dark-current-fitting — PbS CQD Dark Current Component Fitting
 
-## Overview
-
-Fits Jdark-V data using an **implicit diode model** with series resistance R_S.
-V_int = V − J_D·R_S, solved via damped fixed-point iteration.
-
 ## Models
 
-### Dual-Diode Model (8 parameters)
+### Dual-Diode (8 parameters)
 ```
 J_D = J01·[exp(A1·V_int)−1] + J02·[exp(A2·V_int)−1] + V_int/R_SH + k·V·exp(m/V_int)
-      J_diff (diffusion)       J_rec (recombination)    J_Ohm (ohmic)  J_TAT (trap-assisted tunneling)
+      J_diff (diffusion)       J_rec (recombination)     J_Ohm (ohmic)  J_TAT (TAT)
 
 V_int = V − J_D·R_S
 ```
 
-### Single-Diode Model (6 parameters, J02 ≡ 0)
+### Single-Diode (6 parameters, J02 ≡ 0)
 ```
 J_D = J01·[exp(A1·V_int)−1] + V_int/R_SH + k·V·exp(m/V_int)
+      J_main (diffusion+recombination)  J_Ohm (ohmic)  J_TAT (TAT)
 ```
 
-A1 = q/(n1·k_B·T), n1 ≈ 1;  A2 = q/(n2·k_B·T), n2 ≈ 2.
-
-**Voltage convention**: V_fit = −V_raw, J_fit = −I_raw/Area. V_fit > 0 = forward bias.
+A1 = q/(n1·k_B·T); A2 = q/(n2·k_B·T). V_fit = −V_raw, J_fit = −I_raw/Area.
 
 ## Parameters
 
@@ -52,39 +45,28 @@ A1 = q/(n1·k_B·T), n1 ≈ 1;  A2 = q/(n2·k_B·T), n2 ≈ 2.
 | TAT barrier | m | V | [-1.0, -0.001] |
 
 ### Single-Diode
-Same but without J02, A2 (6 parameters).
+Same but without J02, A2 (6 parameters). J_main = diffusion+recombination combined.
 
 ## Current Components
-| Component | Formula | Physics |
-|-----------|---------|---------|
-| J_diff | J01·[exp(A1·V_int)−1] | Diffusion (n1≈1) |
-| J_rec | J02·[exp(A2·V_int)−1] | G-R recombination (n2≈2) |
-| J_Ohm | V_int / R_SH | Ohmic shunt |
-| J_TAT | k·V·exp(m/V_int) | Trap-assisted tunneling (m<0) |
+| Component | Dual-Diode | Single-Diode |
+|-----------|-----------|--------------|
+| Primary diode | J_diff (diffusion) | J_main (diffusion+recombination) |
+| Recombination | J_rec | — |
+| Ohmic | J_Ohm | J_Ohm |
+| TAT | J_TAT | J_TAT |
 
 ## Output Structure
 ```
 output/
-├── model_single/
-│   ├── <name>_fitting.svg / .pdf / .png / _600dpi.png
-│   ├── <name>_component_fit.txt
-│   ├── <name>_params.csv
-│   └── <name>_report.docx
-├── model_dual/
-│   └── (same structure)
+├── model_single/   (V, J_data, J_fit, J_main, J_Ohm, J_TAT)
+└── model_dual/     (V, J_data, J_fit, J_diff, J_rec, J_Ohm, J_TAT)
 ```
 
-### Component .txt
-**Dual**: `V(V)  J_data  J_fit  J_diff  J_rec  J_Ohm  J_TAT`
-**Single**: `V(V)  J_data  J_fit  J_diff  J_Ohm  J_TAT`
-
 ## Plot Formatting
-- Font: Arial bold axis labels
-- Ticks: inward, no grid, no legend frame
-- Colors (Wong 2011): Data #0072B2, Fit #D55E00, J_diff #009E73, J_rec #F0E442, J_Ohm #CC79A7, J_TAT #56B4E9
-- Y-axis: data −1.5 to +0.6 decades
-- X-axis: exact data range, no padding
-- Width: 8.5 cm, export SVG+PDF+PNG(300dpi)+PNG(600dpi with --hd)
+- Font: Arial bold; ticks inward; no grid; no legend frame
+- Colors (Wong 2011): Data #0072B2, Fit #D55E00, J_diff/J_main #009E73, J_rec #F0E442, J_Ohm #CC79A7, J_TAT #56B4E9
+- Y-axis: data −1.5 to +0.6 decades; X-axis: exact range, no padding
+- Width: 8.5 cm; export SVG+PDF+PNG(300dpi)+PNG(600dpi --hd)
 
 ## Usage
 ```bash
