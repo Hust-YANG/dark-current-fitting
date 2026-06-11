@@ -1,50 +1,68 @@
 # Dark Current Fitting — PbS CQD Photodetector
 
-A Python tool for quantitative multi-mechanism dark current component fitting of PbS colloidal quantum dot (CQD) infrared photodetectors. Decomposes measured J-V characteristics into three physically distinct transport components using segmented curve fitting with global refinement.
+A Python tool for quantitative dark current component fitting of PbS colloidal quantum dot (CQD) infrared photodetectors.
+Decomposes measured J-V characteristics into physically distinct transport components using global curve fitting
+with an **implicit diode model** incorporating series resistance R<sub>S</sub>.
 
-## Fitting Model
+## Models
+
+### Dual-Diode Model (8 parameters)
 
 <div align="center">
 
-**J<sub>dark</sub> = J<sub>0</sub>·[exp(qV/AkT) − 1]  +  V/R<sub>sh</sub>  +  B·V·exp[−C/(V<sub>bi</sub> − V)]**
+**J<sub>D</sub> = J<sub>01</sub>·[exp(A<sub>1</sub>·V<sub>int</sub>) − 1] + J<sub>02</sub>·[exp(A<sub>2</sub>·V<sub>int</sub>) − 1] + V<sub>int</sub>/R<sub>SH</sub> + k·V·exp(m/V<sub>int</sub>)**
 
-*J<sub>main</sub> (Diffusion-Recombination)  +  J<sub>Ohm</sub> (Ohmic Leakage)  +  J<sub>TAT</sub> (Trap-Assisted Tunneling)*
+**V<sub>int</sub> = V − J<sub>D</sub>·R<sub>S</sub>** *(implicit equation, solved by damped fixed-point iteration)*
+
+*J<sub>diff</sub> (Diffusion, n<sub>1</sub>≈1) + J<sub>rec</sub> (G-R Recombination, n<sub>2</sub>≈2) + J<sub>Ohm</sub> (Ohmic) + J<sub>TAT</sub> (Trap-Assisted Tunneling)*
 
 </div>
 
-### Three Current Components
+### Single-Diode Model (6 parameters, J<sub>02</sub> ≡ 0)
 
-| Component | Equation | Physical Origin | Dominant Region |
-|-----------|----------|-----------------|-----------------|
-| **J<sub>main</sub>** | J<sub>0</sub>·[exp(qV/AkT) − 1] | Minority carrier diffusion + G-R recombination in depletion region | Low reverse bias (0 ~ −0.2 V) |
-| **J<sub>Ohm</sub>** | V/R<sub>sh</sub> | Ohmic conduction through film pinholes and grain boundaries | Full range (typically negligible) |
-| **J<sub>TAT</sub>** | B·V·exp[−C/(V<sub>bi</sub> − V)] | Thermal excitation to trap states + field-assisted tunneling | High reverse bias (< −0.2 V) |
+<div align="center">
 
-### Fitted Parameters
+**J<sub>D</sub> = J<sub>01</sub>·[exp(A<sub>1</sub>·V<sub>int</sub>) − 1] + V<sub>int</sub>/R<sub>SH</sub> + k·V·exp(m/V<sub>int</sub>)**
 
-| Parameter | Symbol | Unit | Description |
-|-----------|--------|------|-------------|
-| Reverse saturation current density | J<sub>0</sub> | A/cm² | Intrinsic recombination activity |
-| Ideality factor | A | – | Quality factor (A→1 ideal, A>1 trap-mediated) |
-| Shunt resistance | R<sub>sh</sub> | Ω·cm² | Film ohmic leakage pathways |
-| TAT defect density coefficient | B | – | Proportional to trap state density N<sub>t</sub> |
-| TAT barrier coefficient | C | – | Effective tunneling barrier height |
-| Built-in voltage | V<sub>bi</sub> | V | Junction internal electric field |
+*J<sub>main</sub> (Diffusion + Recombination combined) + J<sub>Ohm</sub> + J<sub>TAT</sub>*
 
-## Segmented Fitting Strategy
+</div>
 
-1. **Stage 1** (|V| < 0.2 V): J<sub>main</sub> dominant → fit **J<sub>0</sub>, A**
-2. **Stage 2** (V < −0.2 V): J<sub>TAT</sub> + J<sub>Ohm</sub> dominant → fix J<sub>0</sub>, A → fit **R<sub>sh</sub>, B, C, V<sub>bi</sub>**
-3. **Stage 3**: Global refinement — all 6 parameters co-adjusted within physical bounds
+> **Voltage convention**: Raw V>0 = reverse, V<0 = forward. Script negates internally so V<sub>fit</sub>>0 = forward bias.
+>
+> **Implicit solver**: V<sub>int</sub> = V − J<sub>D</sub>·R<sub>S</sub> makes the equation implicit. Solved via damped fixed-point iteration (damping=0.4, tol=1×10⁻¹⁰).
 
-> J<sub>BTB</sub> (band-to-band tunneling) is explicitly excluded — PbS CQD films lack the high doping and narrow depletion region required.
+## Current Components
+
+| Component | Dual-Diode | Single-Diode | Physics |
+|-----------|-----------|--------------|---------|
+| Primary | **J<sub>diff</sub>** | **J<sub>main</sub>** | Diffusion (n₁≈1) / Diffusion+Recombination |
+| Recombination | **J<sub>rec</sub>** | — | G-R center recombination (n₂≈2) |
+| Ohmic | **J<sub>Ohm</sub>** | J<sub>Ohm</sub> | Shunt leakage through pinholes |
+| Tunneling | **J<sub>TAT</sub>** | J<sub>TAT</sub> | Trap-assisted tunneling, k·V·exp(m/V<sub>int</sub>) |
+
+## Parameters
+
+| Parameter | Symbol | Unit | Bounds | Description |
+|-----------|--------|------|--------|-------------|
+| Diffusion saturation current | J<sub>01</sub> | A/cm² | [1×10⁻¹², 1×10⁻³] | Minority carrier diffusion |
+| Diffusion coefficient | A<sub>1</sub> | V⁻¹ | [10, 50] | A₁ = q/(n₁·k<sub>B</sub>·T), n₁≈1 |
+| Recombination saturation current | J<sub>02</sub> | A/cm² | [1×10⁻¹², 1×10⁻³] | G-R center density (dual only) |
+| Recombination coefficient | A<sub>2</sub> | V⁻¹ | [5, 30] | A₂ = q/(n₂·k<sub>B</sub>·T), n₂≈2 |
+| Series resistance | R<sub>S</sub> | Ω·cm² | [0, 1×10⁴] | Contact + transport layer voltage drop |
+| Shunt resistance | R<sub>SH</sub> | Ω·cm² | [1×10³, 1×10⁸] | Ohmic leakage pathways |
+| TAT coefficient | k | — | [1×10⁻¹⁰, 1×10²] | ∝ trap density N<sub>t</sub> |
+| TAT barrier | m | V | [−1.0, −0.001] | m<0 → tunneling grows with reverse bias |
+
+## Fitting Strategy
+
+Global fitting via `scipy.optimize.curve_fit` (TRF method) with **6 diverse initial guesses** covering different parameter regions.
+Best R² selected. No segmented fitting — fully global optimization with physically constrained parameter bounds.
 
 ## Sample Output
+
 <p align="center">
-<img width="600" alt="sample_fitting_600dpi" src="https://github.com/user-attachments/assets/f7cd9e9a-ad39-47c6-8df9-a6f7d8a57dd7" />
-</p>
-<p align="center">
-Figure 1. Dark current J-V characteristics and multi-mechanism fitting results. 
+<img width="600" alt="sample_fitting" src="https://github.com/user-attachments/assets/f7cd9e9a-ad39-47c6-8df9-a6f7d8a57dd7" />
 </p>
 
 ## Installation
@@ -56,53 +74,78 @@ pip install numpy scipy matplotlib pandas python-docx
 ## Usage
 
 ```bash
+# Run with both single & dual diode models (default)
 python scripts/dark_current_fitting.py sample.txt -a 0.0707 --points 201 --hd
+
+# Dual-diode only
+python scripts/dark_current_fitting.py sample.txt -a 0.0707 --model dual
+
+# Single-diode only
+python scripts/dark_current_fitting.py sample.txt -a 0.0707 --model single
 ```
 
 | Argument | Description | Default |
 |----------|-------------|---------|
-| `data` | Input data file (.txt) | Required |
+| `data` | Input data file (.txt) | **Required** |
 | `-a, --area` | Device area (cm²) | None |
+| `--model` | `single`, `dual`, `both` | `both` |
 | `--points N` | Use first N data points | All |
-| `--vmin` | Lower voltage limit (V) | -0.5 |
+| `--vmin` | Lower voltage limit (V) | −0.6 |
 | `--vmax` | Upper voltage limit (V) | 0.2 |
-| `--no-segmented` | Use global single-fit | False |
+| `-T` | Temperature (K) | 300 |
 | `--fig-width-cm` | Figure width (cm) | 8.5 |
 | `--hd` | Export 600 dpi PNG | False |
+| `--no-auto-dark` | Disable auto dark-sweep detection | False |
 | `-o` | Output directory | ./output |
 
 ### Input Format
 
-Tab-separated text file with columns: `Index  V1 (V)  I1 (A)`
+Tab-separated text file with 3-column format: `Index  V1 (V)  I1 (A)`
 
-```
-Index    V1 (V)    I1 (A)
-1/1      -1.0000E+00      -3.63062E-004
-1/2      -9.900E-001      -3.60758E-004
-...
-```
+Supports multi-sweep data (`1/1, 1/2, ...`) with automatic dark-sweep detection (|I@V≈0| / max|I| < 1%).
 
-Supports multi-sweep data with automatic dark-sweep detection (ratio < 1% at V≈0).
-
-## Output
+## Output Structure
 
 ```
 output/
-├── sample_fitting.svg          # Vector (SVG)
-├── sample_fitting.pdf          # Vector (PDF)  
-├── sample_fitting.png          # 300 dpi raster
-├── sample_fitting_600dpi.png   # 600 dpi (--hd)
-├── sample_component_fit.txt    # Component data
-├── fitting_params.csv          # Parameter table
-└── fitting_report.docx         # Academic report with embedded figure
+├── model_single/
+│   ├── sample_fitting.svg / .pdf / .png / _600dpi.png
+│   ├── sample_component_fit.txt    (V, J_data, J_fit, J_main, J_Ohm, J_TAT)
+│   ├── sample_params.csv
+│   └── sample_report.docx
+├── model_dual/
+│   ├── sample_fitting.svg / .pdf / .png / _600dpi.png
+│   ├── sample_component_fit.txt    (V, J_data, J_fit, J_diff, J_rec, J_Ohm, J_TAT)
+│   ├── sample_params.csv
+│   └── sample_report.docx
 ```
+
+## Plot Formatting (Journal-Ready)
+
+- **Font**: Arial bold axis labels
+- **Ticks**: Inward, no grid, no legend frame
+- **Colors** (Wong 2011 color-blind friendly): Data `#0072B2`, Fit `#D55E00`, J<sub>diff</sub>/J<sub>main</sub> `#009E73`, J<sub>rec</sub> `#F0E442`, J<sub>Ohm</sub> `#CC79A7`, J<sub>TAT</sub> `#56B4E9`
+- **Y-axis**: semilogy, data range −1.5 to +0.6 decades
+- **X-axis**: Exact data range, no padding
+- **Export**: SVG + PDF + PNG (300 dpi) + PNG (600 dpi with `--hd`)
+- **Width**: 8.5 cm (single column)
+
+## Academic Word Report (.docx)
+
+Generated automatically with:
+- Embedded PNG fitting figure
+- Model equation
+- Component-by-component physical interpretation
+- Voltage-dependent dominance analysis (J<sub>diff</sub>/J<sub>main</sub> → J<sub>TAT</sub> crossover)
+- Full parameter table
+- Device optimization implications
 
 ## Dependencies
 
 - **numpy** — numerical computation
 - **scipy** — curve fitting (TRF method)
 - **matplotlib** — publication-quality plots
-- **pandas** — data export
+- **pandas** — CSV export
 - **python-docx** — Word report generation
 
 ## License
