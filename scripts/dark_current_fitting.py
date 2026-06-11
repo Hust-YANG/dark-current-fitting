@@ -49,7 +49,6 @@ COLOR_PALETTE = dict(
     j_ohm='#CC79A7', j_tat='#56B4E9'
 )
 
-# [J01, A1, J02, A2, R_S, R_SH, k, m]   m < 0 for TAT: exp(m/V_int)
 BOUNDS_DUAL = (
     [1e-12, 10.0, 1e-12,  5.0,  0.0,  1e3, 1e-10, -1.0],
     [1e-3,  50.0, 1e-3,   30.0, 1e4,  1e8, 1e2,   -0.001]
@@ -275,10 +274,16 @@ def plot_fitting(V, J, fit, ax):
     ax.set_xlabel('Voltage (V)', fontweight='bold')
     ax.set_ylabel('Current Density (A/cm$^{2}$)', fontweight='bold')
     ax.tick_params(top=False, right=False, which='both', labelsize=8)
+    for label in ax.get_xticklabels() + ax.get_yticklabels():
+        label.set_fontweight('bold')
     ax.set_xlim(V.min(), V.max())
     Jpos = np.abs(J)[np.abs(J) > 0]
     ax.set_ylim(np.min(Jpos) * 10**(-1.5), np.max(Jpos) * 10**(0.6))
-    ax.legend(fontsize=6, loc='lower left', frameon=False, handlelength=1.5, prop={'weight': 'normal'})
+    leg = ax.legend(fontsize=6, loc='lower left', frameon=False,
+                    handlelength=1.5)
+    for i, txt in enumerate(leg.get_texts()):
+        if i >= 2:
+            txt.set_fontweight('bold')
 
 
 def save_figure_formats(fig, basepath, hd=False):
