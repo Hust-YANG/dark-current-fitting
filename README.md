@@ -18,7 +18,7 @@ with an **implicit diode model** incorporating series resistance R<sub>S</sub>.
 
 </div>
 
-**Attention:A_1 = \frac{q}{n_1 \cdot k_B \cdot T};A_2 = \frac{q}{n_2 \cdot k_B \cdot T}
+**Attention:A_1 = \frac{q}{n_1 \cdot k_B \cdot T};A_2 = \frac{q}{n_2 \cdot k_B \cdot T}**
 
 </div>
 
