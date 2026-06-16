@@ -27,7 +27,7 @@ with an **implicit diode model** incorporating series resistance R<sub>S</sub>.
 *J<sub>main</sub> (Diffusion + Recombination combined) + J<sub>Ohm</sub> + J<sub>TAT</sub>*
 
 </div>
-
+A1 = q/(n1·k_B·T); A2 = q/(n2·k_B·T). V_fit = −V_raw, J_fit = −I_raw/Area.
 > **Voltage convention**: Raw V>0 = reverse, V<0 = forward. Script negates internally so V<sub>fit</sub>>0 = forward bias.
 >
 > **Implicit solver**: V<sub>int</sub> = V − J<sub>D</sub>·R<sub>S</sub> makes the equation implicit. Solved via damped fixed-point iteration (damping=0.4, tol=1×10⁻¹⁰).
