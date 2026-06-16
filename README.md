@@ -16,9 +16,9 @@ with an **implicit diode model** incorporating series resistance R<sub>S</sub>.
 
 *J<sub>diff</sub> (Diffusion, n<sub>1</sub>≈1) + J<sub>rec</sub> (G-R Recombination, n<sub>2</sub>≈2) + J<sub>Ohm</sub> (Ohmic) + J<sub>TAT</sub> (Trap-Assisted Tunneling)*
 
-</div>
+<div align="center">
 
-**A1 = q/(n1·k_B·T); A2 = q/(n2·k_B·T)**
+**Attention: A1 = q/(n1·k_B·T); A2 = q/(n2·k_B·T)**
 
 </div>
 
